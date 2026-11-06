@@ -1,0 +1,2135 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>คำนวณพื้นที่จากแปลน</title>
+<style>
+:root{
+  --paper:#f5f2ea; --card:#fffdf8; --ink:#1e2a30; --muted:#5f6b70; --line:#d9d3c5;
+  --accent:#c8460c; --accent-ink:#fff; --ok:#1f7a4d; --warn:#9a5b00; --warn-bg:#fdf1d8;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 "Noto Sans Thai","Leelawadee UI","Sarabun",Tahoma,sans-serif;
+  display:grid;grid-template-columns:minmax(0,1fr) 400px;height:100vh;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 11px}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.primary:hover:not(:disabled){background:#a93a08;border-color:#a93a08}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=number],input[type=text],select{background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
+
+/* ---- แปลน ---- */
+#left{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-width:0;min-height:0}
+#toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+#toolbar .sep{flex:1}
+.tool[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+#stage{position:relative;overflow:hidden;background:#fff;touch-action:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#stage.dragover{outline:3px dashed var(--accent);outline-offset:-8px}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;
+  background-image:linear-gradient(#efeade 1px,transparent 1px),linear-gradient(90deg,#efeade 1px,transparent 1px);background-size:32px 32px}
+#empty h2{margin:0;font-size:22px}
+#empty p{margin:0;color:var(--muted);max-width:44ch}
+#scaleBox{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--ink);border-radius:8px;
+  padding:10px 12px;display:none;gap:8px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.15);white-space:nowrap}
+#scaleBox.show{display:flex}
+#scaleBox input{width:96px}
+#hint{padding:6px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px;min-height:33px}
+#hint.warn{background:var(--warn-bg);color:var(--warn)}
+
+/* ---- แผงขวา ---- */
+#right{border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--card)}
+#result{background:var(--ink);color:#fff;padding:14px 16px}
+#result .lbl{font-size:13.5px;opacity:.8}
+#total{font-size:44px;line-height:1.15;font-weight:700;font-variant-numeric:tabular-nums}
+#total small{font-size:18px;font-weight:500;margin-left:6px}
+#formula{font-size:13.5px;opacity:.85;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#scroll{overflow:auto;flex:1;min-height:0}
+section{padding:12px 16px;border-bottom:1px solid var(--line)}
+section h3{margin:0 0 8px;font-size:14.5px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row+.row{margin-top:8px}
+.row label{display:flex;gap:6px;align-items:center}
+.grow{flex:1;min-width:0}
+.note{color:var(--muted);font-size:13px;margin:6px 0 0}
+.note.good{color:var(--ok)}
+.note.bad{color:var(--warn)}
+#fileName{overflow-wrap:anywhere;font-size:13.5px;color:var(--muted)}
+#layerList{max-height:140px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:13.5px}
+#layerList label{display:flex;gap:6px;align-items:center}
+#layerList .cnt{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+#layerList .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;table-layout:fixed}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12.5px;padding:2px 4px}
+th.r,td.r{text-align:right}
+td{padding:2px 2px;border-top:1px solid #eee7d8}
+col.cL,col.cW{width:60px}
+col.cA{width:74px}
+col.cX{width:34px}
+#rows input,#beamRows input{width:100%;border-color:transparent;background:transparent;padding:2px 4px}
+#rows input:hover:not(:disabled),#rows input:focus,#beamRows input:hover,#beamRows input:focus{border-color:var(--line);background:#fff}
+#rows input.num,#beamRows input.num{text-align:right}
+#rows input.est,#beamRows input.est{color:var(--warn);font-style:italic}
+#rows input.edited,#beamRows input.edited{color:var(--accent);font-weight:600}
+summary{cursor:pointer;font-weight:600;font-size:14.5px}
+#rows input.area{font-weight:600}
+#rows tr.sum td{font-weight:700;border-top:2px solid var(--ink);padding:5px 4px}
+tr.hot{background:#fdeee3}
+.x{border:none;background:none;color:var(--muted);padding:0 6px;font-size:16px;line-height:1}
+.x:hover{color:var(--accent)}
+#noRooms{color:var(--muted);font-size:13.5px;margin:0}
+.addRoom input[type=number]{width:74px}
+#addName{flex:1;min-width:110px}
+#askBox{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+#askBox>div{background:var(--card);border-radius:10px;padding:16px;max-width:340px;width:100%}
+#askBox p{margin:0 0 12px}
+#askBox .row{justify-content:flex-end}
+#printArea{display:none}
+@media (max-width:900px){
+  html,body{height:auto}
+  body{display:block;height:auto;min-height:100dvh;overflow:auto}
+  #left{display:block}
+  #toolbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #toolbar button{flex:none;min-height:40px}
+  #toolbar .sep{display:none}
+  #stage{height:58vh;height:58dvh}
+  #right{border-left:none;border-top:1px solid var(--line);display:block}
+  #scroll{overflow:visible}
+  #total{font-size:34px}
+  input[type=number],input[type=text],select{font-size:16px}
+  button{min-height:38px}
+  .x{min-height:0;padding:6px 10px}
+  #scaleBox{white-space:normal;flex-wrap:wrap;width:calc(100% - 16px);top:8px}
+}
+@media print{
+  @page{size:A4;margin:0}
+  html,body{display:block;height:auto;overflow:visible;background:#fff}
+  body>*{display:none!important}
+  #printArea{display:block!important}
+  #printArea img{display:block;width:100%;break-after:page}
+}
+</style>
+</head>
+<body>
+<div id="left">
+  <div id="toolbar" role="toolbar" aria-label="เครื่องมือ">
+    <button class="primary" id="autoBtn" disabled title="หาคาน ห้อง และอ่านเลขบอกระยะจากแปลนให้เอง">อ่านแบบอัตโนมัติ</button>
+    <button class="tool" data-tool="trace" aria-pressed="false" title="คลิกจุดเริ่มและจุดสิ้นสุดของคานที่ขาด ห้องจะคำนวณใหม่เอง">ลากคาน</button>
+    <button class="tool" data-tool="beamdel" aria-pressed="false" title="คลิกคานที่เกินเพื่อลบ ห้องจะคำนวณใหม่เอง">ลบคาน</button>
+    <button class="tool" data-tool="rect" aria-pressed="true" title="คลิกมุมห้องสองมุมที่อยู่ตรงข้ามกัน">วาดห้อง</button>
+    <button class="tool" data-tool="poly" aria-pressed="false" title="คลิกทีละมุมของห้องที่ไม่เป็นสี่เหลี่ยม แล้วคลิกจุดแรกเพื่อปิดรูป">ห้องหลายเหลี่ยม</button>
+    <button class="tool" data-tool="merge" aria-pressed="false" title="คลิกสองห้องที่ติดกันเพื่อรวมเป็นห้องเดียว">รวมห้อง</button>
+    <button class="tool" data-tool="erase" aria-pressed="false" title="คลิกห้องบนแปลนเพื่อลบ">ลบห้อง</button>
+    <button class="tool" data-tool="scale" aria-pressed="false" title="คลิกสองจุดที่รู้ระยะจริง">ตั้งมาตราส่วน</button>
+    <span class="sep"></span>
+    <button id="undoBtn" title="ย้อนขั้นตอนล่าสุด (Ctrl+Z)">ย้อนกลับ</button>
+    <button id="zoomOut" aria-label="ซูมออก">−</button>
+    <button id="zoomIn" aria-label="ซูมเข้า">+</button>
+    <button id="fitBtn">พอดีจอ</button>
+  </div>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="empty">
+      <h2>นำเข้าแปลนพื้น</h2>
+      <p>ลากไฟล์มาวางตรงนี้ หรือกดปุ่มด้านล่าง รองรับรูป PNG, JPG, ไฟล์ PDF และ DXF</p>
+      <button class="primary" id="emptyOpen">เลือกไฟล์แปลน</button>
+    </div>
+    <div id="scaleBox">
+      <label for="scaleVal">ระยะจริงระหว่างสองจุด</label>
+      <input id="scaleVal" type="number" min="0" step="any" inputmode="decimal"> เมตร
+      <button class="primary" id="scaleOk">ตกลง</button>
+      <button id="scaleCancel">ยกเลิก</button>
+    </div>
+  </div>
+  <div id="hint" role="status"></div>
+</div>
+
+<aside id="right">
+  <div id="result">
+    <div class="lbl">พื้นที่รวมทุกห้อง</div>
+    <div id="total">0.00<small>ตร.ม.</small></div>
+    <div id="formula">ยังไม่มีห้อง</div>
+  </div>
+  <div id="scroll">
+    <section>
+      <h3>แปลน</h3>
+      <div class="row">
+        <button id="openBtn">เลือกไฟล์แปลน</button>
+        <input id="file" type="file" hidden accept="image/*,application/pdf,.pdf,.dxf,.dwg">
+        <span id="fileName" class="grow">ยังไม่ได้เลือกไฟล์</span>
+      </div>
+      <div class="row" id="pageRow" hidden>
+        <label>หน้า PDF <select id="pageSel"></select></label>
+      </div>
+      <div class="row" id="unitRow" hidden>
+        <label>หน่วยในไฟล์ DXF
+          <select id="unitSel">
+            <option value="0.001">มิลลิเมตร</option>
+            <option value="0.01">เซนติเมตร</option>
+            <option value="1">เมตร</option>
+            <option value="0.0254">นิ้ว</option>
+            <option value="0.3048">ฟุต</option>
+          </select>
+        </label>
+      </div>
+      <p class="note" id="scaleNote">ยังไม่ได้ตั้งมาตราส่วน</p>
+    </section>
+
+    <section id="layerSec" hidden>
+      <h3>Layer ในไฟล์ DXF</h3>
+      <div id="layerList"></div>
+      <p class="note">ปิด Layer ที่ไม่ใช่ผนังหรือคาน แล้วกด "อ่านแบบอัตโนมัติ" อีกครั้ง จะหาห้องได้แม่นขึ้น</p>
+    </section>
+
+    <section>
+      <h3>รายการห้อง</h3>
+      <p id="noRooms">เลือกไฟล์แปลนเพื่อหาห้องอัตโนมัติ หรือพิมพ์ขนาดห้องด้านล่าง</p>
+      <table id="tbl" hidden>
+        <colgroup><col><col class="cL"><col class="cW"><col class="cA"><col class="cX"></colgroup>
+        <thead><tr><th>ห้อง</th><th class="r">ยาว (ม.)</th><th class="r">กว้าง (ม.)</th><th class="r">ตร.ม.</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="note" id="estNote" hidden>ตัวเอียงสีน้ำตาล = ไม่มีเลขบอกระยะในแบบ ค่าประมาณจากรูป ควรตรวจกับแบบ</p>
+      <div class="row addRoom" style="margin-top:10px">
+        <input id="addName" type="text" placeholder="ชื่อห้อง (ไม่ใส่ก็ได้)" aria-label="ชื่อห้อง">
+      </div>
+      <div class="row addRoom">
+        <input id="addL" type="number" min="0" step="any" inputmode="decimal" placeholder="ยาว" aria-label="ความยาวห้อง (เมตร)">
+        ×
+        <input id="addW" type="number" min="0" step="any" inputmode="decimal" placeholder="กว้าง" aria-label="ความกว้างห้อง (เมตร)">
+        ม.
+        <button id="addBtn">เพิ่มห้อง</button>
+      </div>
+      <div class="row">
+        <button id="clearBtn" disabled>ล้างทั้งหมด</button>
+      </div>
+    </section>
+
+    <section id="beamSec" hidden>
+      <details>
+        <summary id="beamSum">รายการคาน</summary>
+        <p class="note">ยาวและกว้างของห้องมาจากความยาวคานที่ล้อมห้อง แก้ความยาวตรงนี้แล้วห้องจะคำนวณใหม่</p>
+        <table>
+          <colgroup><col><col class="cA"><col class="cX"></colgroup>
+          <thead><tr><th>คาน</th><th class="r">ยาว (ม.)</th><th></th></tr></thead>
+          <tbody id="beamRows"></tbody>
+        </table>
+      </details>
+    </section>
+
+    <section>
+      <h3>พิมพ์และดาวน์โหลด</h3>
+      <div class="row">
+        <button id="printBtn" disabled>พิมพ์</button>
+        <button id="pdfBtn" class="primary" disabled>ดาวน์โหลด PDF</button>
+        <button id="pngBtn" disabled>ดาวน์โหลดรูปภาพ</button>
+        <button id="csvBtn" disabled>CSV (Excel)</button>
+      </div>
+      <p class="note" id="exportNote">รายงานมีแปลนพร้อมขอบเขตห้อง พื้นที่รวม และรายการทุกห้อง</p>
+    </section>
+  </div>
+</aside>
+<div id="printArea"></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d'), stage = $('stage');
+
+const S = {
+  kind: null,            // 'raster' | 'dxf'
+  raster: null,          // canvas หรือ image
+  rw: 0, rh: 0,
+  dxf: null,             // {segs, texts, layers:Map(name->{count,visible}), path, bounds}
+  pdf: null, page: 1, pdfWords: null,
+  mPerUnit: null,        // เมตรต่อ 1 หน่วยบนแปลน
+  rooms: [], nextNo: 1, undo: [],
+  beams: [], beamNo: 1,  // คานบนแปลน ห้องที่ auto:true สร้างจากคานเหล่านี้
+  hidden: [],            // ห้องจากคานที่ผู้ใช้ลบหรือรวมไปแล้ว
+  hotBeam: null,
+  axes: null,            // แนวผนังสำหรับจุดยึด {xs, ys}
+  view: { s: 1, ox: 0, oy: 0 },
+  tool: 'rect',
+  pending: null,         // มุมแรกของห้องที่กำลังวาด
+  poly: [],              // มุมของห้องหลายเหลี่ยมที่กำลังวาด
+  mergeA: null,          // ห้องแรกที่เลือกเพื่อรวม
+  scalePts: null,        // [p1,p2] ระหว่างตั้งมาตราส่วน
+  mouse: null,           // ตำแหน่งบนแปลน (หลัง snap)
+  snapped: false,
+  hotRoom: null, shift: false,
+};
+
+/* ---------- การคำนวณ ----------
+   ห้อง = { name, parts:[[{x,y}..]], outline:[[a,b]..], rect,
+            dx, dy, plan: ขนาด/พื้นที่จากเลขในแบบ, est: เป็นค่าประมาณ,
+            mL, mW, mArea: ค่าที่พิมพ์เอง } */
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function polyArea(p) {
+  let s = 0;
+  for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; s += a.x * b.y - b.x * a.y; }
+  return Math.abs(s) / 2;
+}
+function bbox(pts) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+  return { x0, y0, x1, y1 };
+}
+// ยาว = ด้านยาว กว้าง = ด้านสั้น คืน null ถ้าไม่ใช่สี่เหลี่ยมหรือยังไม่รู้มาตราส่วน
+function roomDims(r) {
+  if (r.mL != null && r.mW != null) return { L: r.mL, W: r.mW };
+  if (!r.rect) return null;
+  if (r.dx != null) return { L: Math.max(r.dx, r.dy), W: Math.min(r.dx, r.dy) };
+  if (!S.mPerUnit || !r.parts.length) return null;
+  const b = bbox(r.parts.flat());
+  // ห้องที่หาจาก DXF ผ่านการแปลงเป็นภาพ จึงปัดเศษ 1 ซม. ทิ้ง
+  const fix = v => r.cells && S.kind === 'dxf' ? Math.round(v * 100) / 100 : v;
+  const w = fix((b.x1 - b.x0) * S.mPerUnit), h = fix((b.y1 - b.y0) * S.mPerUnit);
+  return { L: Math.max(w, h), W: Math.min(w, h) };
+}
+function roomArea(r) {
+  if (r.mArea != null) return r.mArea;
+  const d = roomDims(r);
+  if (d) return d.L * d.W;
+  if (r.plan != null) return r.plan;
+  if (!S.mPerUnit || !r.parts.length) return null;
+  return r.parts.reduce((s, p) => s + polyArea(p), 0) * S.mPerUnit * S.mPerUnit;
+}
+const roomSource = r => r.mArea != null || r.mL != null ? 'พิมพ์เอง' : r.est ? 'ประมาณ' : r.plan != null && S.scaleFromOcr ? 'ตามแบบ' : 'วัดจากแปลน';
+function totals() {
+  let sum = 0, missing = 0;
+  for (const r of S.rooms) { const a = roomArea(r); if (a == null) missing++; else sum += a; }
+  return { sum, missing };
+}
+function pushUndo() {
+  S.undo.push(JSON.stringify({ rooms: S.rooms, nextNo: S.nextNo, beams: S.beams, beamNo: S.beamNo, hidden: S.hidden }));
+  if (S.undo.length > 30) S.undo.shift();
+}
+
+/* ---------- อ่านไฟล์ DXF ---------- */
+function decodeDXF(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { return new TextDecoder('windows-874').decode(buf); }
+}
+const cleanText = s => s
+  .replace(/\\U\+([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  .replace(/\\[PpNn]/g, ' ')
+  .replace(/\\[A-Za-z][^;\\]*;/g, '')
+  .replace(/[{}]/g, '')
+  .replace(/%%[cC]/g, 'Ø').replace(/%%[dD]/g, '°').replace(/%%[pP]/g, '±');
+
+function parseDXF(text) {
+  if (text.startsWith('AutoCAD Binary DXF')) throw new Error('ไฟล์นี้เป็น DXF แบบ Binary กรุณาบันทึกใหม่เป็น DXF แบบ ASCII');
+  const L = text.split(/\r\n|\r|\n/);
+  const recs = []; let cur = null;
+  for (let i = 0; i + 1 < L.length; i += 2) {
+    const code = parseInt(L[i], 10);
+    if (Number.isNaN(code)) throw new Error('รูปแบบไฟล์ DXF ไม่ถูกต้อง');
+    const val = L[i + 1];
+    if (code === 0) { cur = { type: val.trim(), g: [] }; recs.push(cur); }
+    else if (cur) cur.g.push([code, val]);
+  }
+  const num = (r, c, d = 0) => { const p = r.g.find(x => x[0] === c); return p ? parseFloat(p[1]) : d; };
+  const str = (r, c, d = '') => { const p = r.g.find(x => x[0] === c); return p ? p[1].trim() : d; };
+
+  let insunits = 0, section = null, block = null, poly = null;
+  const blocks = new Map(), model = [];
+
+  function toEnt(r) {
+    const layer = str(r, 8, '0');
+    switch (r.type) {
+      case 'LINE': return { t: 'L', layer, a: { x: num(r, 10), y: num(r, 20) }, b: { x: num(r, 11), y: num(r, 21) } };
+      case 'LWPOLYLINE': {
+        const pts = []; let p = null;
+        for (const [c, v] of r.g) {
+          if (c === 10) { p = { x: parseFloat(v), y: 0, bulge: 0 }; pts.push(p); }
+          else if (c === 20 && p) p.y = parseFloat(v);
+          else if (c === 42 && p) p.bulge = parseFloat(v);
+        }
+        return { t: 'P', layer, pts, closed: (num(r, 70) & 1) === 1 };
+      }
+      case 'ARC': return { t: 'A', layer, c: { x: num(r, 10), y: num(r, 20) }, r: num(r, 40), a0: num(r, 50), a1: num(r, 51) };
+      case 'CIRCLE': return { t: 'A', layer, c: { x: num(r, 10), y: num(r, 20) }, r: num(r, 40), a0: 0, a1: 360 };
+      case 'TEXT': return { t: 'T', layer, p: { x: num(r, 10), y: num(r, 20) }, h: num(r, 40, 1), rot: num(r, 50), s: cleanText(str(r, 1)) };
+      case 'MTEXT': {
+        const s = r.g.filter(x => x[0] === 3 || x[0] === 1).map(x => x[1]).join('');
+        return { t: 'T', layer, p: { x: num(r, 10), y: num(r, 20) }, h: num(r, 40, 1), rot: num(r, 50), s: cleanText(s) };
+      }
+      case 'INSERT': return { t: 'I', layer, name: str(r, 2), p: { x: num(r, 10), y: num(r, 20) }, sx: num(r, 41, 1), sy: num(r, 42, 1), rot: num(r, 50) };
+      case 'DIMENSION': return { t: 'I', layer, name: str(r, 2), p: { x: 0, y: 0 }, sx: 1, sy: 1, rot: 0 };
+    }
+    return null;
+  }
+
+  for (const r of recs) {
+    if (r.type === 'SECTION') {
+      section = str(r, 2);
+      if (section === 'HEADER') {
+        const i = r.g.findIndex(x => x[0] === 9 && x[1].trim() === '$INSUNITS');
+        if (i >= 0 && r.g[i + 1]) insunits = parseInt(r.g[i + 1][1], 10) || 0;
+      }
+      continue;
+    }
+    if (r.type === 'ENDSEC') { section = null; continue; }
+    if (section === 'BLOCKS') {
+      if (r.type === 'BLOCK') { block = { name: str(r, 2), base: { x: num(r, 10), y: num(r, 20) }, ents: [] }; continue; }
+      if (r.type === 'ENDBLK') { if (block) blocks.set(block.name, block); block = null; continue; }
+    } else if (section !== 'ENTITIES') continue;
+
+    const list = section === 'BLOCKS' ? (block && block.ents) : model;
+    if (!list) continue;
+    if (r.type === 'POLYLINE') {
+      if (num(r, 67) === 1) { poly = { pts: [] }; continue; }
+      poly = { t: 'P', layer: str(r, 8, '0'), pts: [], closed: (num(r, 70) & 1) === 1 };
+      list.push(poly); continue;
+    }
+    if (r.type === 'VERTEX') { if (poly) poly.pts.push({ x: num(r, 10), y: num(r, 20), bulge: num(r, 42) }); continue; }
+    if (r.type === 'SEQEND') { poly = null; continue; }
+    if (num(r, 67) === 1) continue;     // ข้าม Paper Space
+    const e = toEnt(r);
+    if (e) list.push(e);
+  }
+
+  const segs = [], texts = [];
+  const ap = (M, p) => ({ x: M[0] * p.x + M[2] * p.y + M[4], y: M[1] * p.x + M[3] * p.y + M[5] });
+  const mul = (A, B) => [
+    A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1],
+    A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3],
+    A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]];
+  const addSeg = (M, a, b, layer, curve) => {
+    const p = ap(M, a), q = ap(M, b);
+    segs.push({ ax: p.x, ay: p.y, bx: q.x, by: q.y, layer, curve: !!curve });
+  };
+  function addArc(M, c, r, start, sweep, layer) {
+    const n = Math.max(6, Math.ceil(Math.abs(sweep) / (Math.PI / 16)));
+    let prev = { x: c.x + r * Math.cos(start), y: c.y + r * Math.sin(start) };
+    for (let k = 1; k <= n; k++) {
+      const t = start + sweep * k / n, p = { x: c.x + r * Math.cos(t), y: c.y + r * Math.sin(t) };
+      addSeg(M, prev, p, layer, true); prev = p;
+    }
+  }
+  function emit(ents, M, inherit, depth) {
+    for (const e of ents) {
+      const layer = e.layer === '0' && inherit ? inherit : e.layer;
+      if (e.t === 'L') addSeg(M, e.a, e.b, layer);
+      else if (e.t === 'P') {
+        const n = e.pts.length, m = e.closed ? n : n - 1;
+        for (let i = 0; i < m; i++) {
+          const p = e.pts[i], q = e.pts[(i + 1) % n], bu = p.bulge || 0;
+          if (Math.abs(bu) < 1e-9) addSeg(M, p, q, layer);
+          else {
+            const d = dist(p, q); if (d < 1e-12) continue;
+            const k = d * (1 - bu * bu) / (4 * bu), nx = -(q.y - p.y) / d, ny = (q.x - p.x) / d;
+            const c = { x: (p.x + q.x) / 2 + nx * k, y: (p.y + q.y) / 2 + ny * k };
+            addArc(M, c, dist(c, p), Math.atan2(p.y - c.y, p.x - c.x), 4 * Math.atan(bu), layer);
+          }
+        }
+      } else if (e.t === 'A') {
+        const a0 = e.a0 * Math.PI / 180; let sw = (e.a1 - e.a0) * Math.PI / 180;
+        if (sw <= 0) sw += 2 * Math.PI;
+        addArc(M, e.c, e.r, a0, sw, layer);
+      } else if (e.t === 'T') {
+        if (!e.s) continue;
+        const r = e.rot * Math.PI / 180, p = ap(M, e.p), q = ap(M, { x: e.p.x + Math.cos(r), y: e.p.y + Math.sin(r) });
+        texts.push({ x: p.x, y: p.y, h: e.h * Math.hypot(M[2], M[3]), ang: Math.atan2(q.y - p.y, q.x - p.x), s: e.s, layer });
+      } else if (e.t === 'I') {
+        const b = blocks.get(e.name);
+        if (!b || depth > 8) continue;
+        const r = e.rot * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+        let T = mul(M, [1, 0, 0, 1, e.p.x, e.p.y]);
+        T = mul(T, [c, s, -s, c, 0, 0]);
+        T = mul(T, [e.sx, 0, 0, e.sy, 0, 0]);
+        T = mul(T, [1, 0, 0, 1, -b.base.x, -b.base.y]);
+        emit(b.ents, T, layer, depth + 1);
+      }
+    }
+  }
+  emit(model, [1, 0, 0, -1, 0, 0], null, 0);   // กลับแกน y ให้ตรงกับหน้าจอ
+  if (!segs.length) throw new Error('ไม่พบเส้นใน Model Space ของไฟล์นี้');
+
+  const layers = new Map();
+  for (const s of segs) {
+    const l = layers.get(s.layer) || { count: 0, visible: true };
+    l.count++; layers.set(s.layer, l);
+  }
+  return { segs, texts, layers, insunits, bounds: robustBounds(segs) };
+}
+
+// ตัดจุดที่อยู่ห่างผิดปกติ เพื่อให้ "พอดีจอ" ไม่ซูมออกไปไกลเพราะเส้นหลงมุม
+function robustBounds(segs) {
+  const xs = [], ys = [];
+  for (const s of segs) { xs.push(s.ax, s.bx); ys.push(s.ay, s.by); }
+  xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
+  const k = xs.length > 200 ? Math.floor(xs.length * 0.005) : 0, e = xs.length - 1 - k;
+  return { x0: xs[k], x1: xs[e], y0: ys[k], y1: ys[e] };
+}
+
+function guessUnit(d) {
+  const known = { 1: 0.0254, 2: 0.3048, 4: 0.001, 5: 0.01, 6: 1 };
+  if (known[d.insunits]) return { m: known[d.insunits], guessed: false };
+  const span = Math.max(d.bounds.x1 - d.bounds.x0, d.bounds.y1 - d.bounds.y0);
+  return { m: span > 1000 ? 0.001 : 1, guessed: true };
+}
+
+function rebuildPath() {
+  const d = S.dxf, p = new Path2D();
+  for (const s of d.segs) {
+    if (!d.layers.get(s.layer).visible) continue;
+    p.moveTo(s.ax, s.ay); p.lineTo(s.bx, s.by);
+  }
+  d.path = p;
+}
+
+/* ---------- นำเข้าไฟล์ ---------- */
+function askBox(msg) {
+  return new Promise(res => {
+    const box = document.createElement('div'); box.id = 'askBox';
+    const card = document.createElement('div'), p = document.createElement('p'), row = document.createElement('div');
+    const no = document.createElement('button'), yes = document.createElement('button');
+    p.textContent = msg; row.className = 'row';
+    no.textContent = 'ยกเลิก'; yes.textContent = 'ตกลง'; yes.className = 'primary';
+    const done = v => { box.remove(); res(v); };
+    no.onclick = () => done(false); yes.onclick = () => done(true);
+    row.append(no, yes); card.append(p, row); box.append(card); document.body.append(box);
+    yes.focus();
+  });
+}
+async function startFresh() {
+  if ((S.rooms.length || S.beams.length) && !await askBox('เปิดแปลนใหม่จะล้างรายการห้องเดิม ต้องการทำต่อหรือไม่?')) return false;
+  S.rooms = []; S.nextNo = 1; S.undo = []; S.axes = null; S.scalePts = null;
+  S.beams = []; S.beamNo = 1; S.hidden = [];
+  clearDraft();
+  $('scaleBox').classList.remove('show');
+  return true;
+}
+function clearDraft() { S.pending = null; S.poly = []; S.mergeA = null; }
+
+async function openFile(f) {
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  if (ext === 'dwg') { hint('อ่านไฟล์ DWG โดยตรงไม่ได้ กรุณาเปิดใน AutoCAD แล้ว Save As เป็น DXF', true); return; }
+  if (!['dxf', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) { hint('ไม่รองรับไฟล์ชนิดนี้ ใช้ PNG, JPG, PDF หรือ DXF', true); return; }
+  if (!await startFresh()) return;
+  hint('กำลังเปิดไฟล์...');
+  try {
+    if (ext === 'dxf') loadDXF(decodeDXF(await f.arrayBuffer()));
+    else if (ext === 'pdf') await loadPDF(await f.arrayBuffer());
+    else await loadImage(f);
+    $('fileName').textContent = f.name;
+    $('empty').hidden = true;
+    fit(); renderAll();
+    $('autoBtn').disabled = false;
+    await autoRead();
+  } catch (e) {
+    console.error(e);
+    hint('เปิดไฟล์ไม่สำเร็จ: ' + e.message, true);
+  }
+}
+
+function loadDXF(text) {
+  const d = parseDXF(text);
+  S.kind = 'dxf'; S.dxf = d; S.raster = null; S.pdf = null; S.pdfWords = null;
+  rebuildPath();
+  const u = guessUnit(d);
+  S.mPerUnit = u.m; S.scaleFromUser = false; S.scaleFromOcr = 0; S.unitGuessed = u.guessed;
+  $('unitSel').value = String(u.m);
+  $('unitRow').hidden = false; $('pageRow').hidden = true; $('layerSec').hidden = false;
+  renderLayers();
+  setTool('rect');
+}
+
+function useRaster(src, w, h) {
+  S.kind = 'raster'; S.raster = src; S.rw = w; S.rh = h; S.dxf = null;
+  S.mPerUnit = null; S.scaleFromUser = false; S.scaleFromOcr = 0;
+  $('unitRow').hidden = true; $('layerSec').hidden = true;
+  setTool('rect');
+}
+
+function loadImage(f) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(f), img = new Image();
+    img.onload = () => { useRaster(img, img.naturalWidth, img.naturalHeight); $('pageRow').hidden = true; S.pdf = null; S.pdfWords = null; res(); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('ไฟล์รูปเสียหรือเปิดไม่ได้')); };
+    img.src = url;
+  });
+}
+
+function loadPdfLib() {
+  if (window.pdfjsLib) return Promise.resolve();
+  const base = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = base + 'pdf.min.js';
+    s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js'; res(); };
+    s.onerror = () => rej(new Error('การเปิด PDF ต้องต่ออินเทอร์เน็ต หากออฟไลน์ให้แปลงแปลนเป็น PNG หรือ JPG ก่อน'));
+    document.head.appendChild(s);
+  });
+}
+
+async function loadPDF(buf) {
+  await loadPdfLib();
+  S.pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const sel = $('pageSel'); sel.replaceChildren();
+  for (let i = 1; i <= S.pdf.numPages; i++) sel.add(new Option(String(i), String(i)));
+  $('pageRow').hidden = S.pdf.numPages < 2;
+  await showPdfPage(1);
+}
+
+async function showPdfPage(n) {
+  const page = await S.pdf.getPage(n);
+  const v1 = page.getViewport({ scale: 1 });
+  const scale = Math.min(6, 4000 / Math.max(v1.width, v1.height));
+  const vp = page.getViewport({ scale });
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  S.page = n;
+  useRaster(c, c.width, c.height);
+  // PDF จาก CAD ที่มีตัวอักษรจริง อ่านเลขได้ตรงเลย ไม่ต้องเดาจากรูป
+  S.pdfWords = [];
+  try {
+    const tc = await page.getTextContent();
+    for (const it of tc.items) {
+      if (!it.str || !/\d/.test(it.str)) continue;
+      const t = pdfjsLib.Util.transform(vp.transform, it.transform);
+      const sz = Math.hypot(t[0], t[1]) || 1, ux = t[0] / sz, uy = t[1] / sz, wd = it.width * scale;
+      S.pdfWords.push({ text: it.str, x: t[4] + ux * wd / 2 + t[2] * 0.35, y: t[5] + uy * wd / 2 + t[3] * 0.35 });
+    }
+  } catch (e) { console.warn(e); }
+}
+
+/* ---------- หาห้องจากแปลน ---------- */
+function planSource() {
+  if (S.kind === 'raster') {
+    const k = 2000 / Math.max(S.rw, S.rh);   // ปรับทุกแปลนให้ขนาดเท่ากันก่อนวิเคราะห์
+    return { w: Math.round(S.rw * k), h: Math.round(S.rh * k), k, ox: 0, oy: 0, up: k,
+      draw(g, w, h) { g.imageSmoothingQuality = 'high'; g.drawImage(S.raster, 0, 0, w, h); } };
+  }
+  const b = S.dxf.bounds, mx = (b.x1 - b.x0) * 0.02 + 1e-9, my = (b.y1 - b.y0) * 0.02 + 1e-9;
+  const ox = b.x0 - mx, oy = b.y0 - my, bw = b.x1 - b.x0 + 2 * mx, bh = b.y1 - b.y0 + 2 * my;
+  const k = 2400 / Math.max(bw, bh);
+  return { w: Math.round(bw * k), h: Math.round(bh * k), k, ox, oy, up: 1,
+    draw(g) {
+      g.setTransform(k, 0, 0, k, -ox * k, -oy * k);
+      g.strokeStyle = '#000'; g.lineWidth = 1.3 / k; g.stroke(S.dxf.path);
+      g.setTransform(1, 0, 0, 1, 0, 0);
+    } };
+}
+function rasterMask(src) {
+  const { w, h } = src;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+  src.draw(g, w, h);
+  const d = g.getImageData(0, 0, w, h).data, n = w * h;
+  const lum = new Uint8Array(n), hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) { const v = (0.3 * d[i * 4] + 0.59 * d[i * 4 + 1] + 0.11 * d[i * 4 + 2]) | 0; lum[i] = v; hist[v]++; }
+  let med = 0; for (let a = 0; med < 255 && a + hist[med] < n / 2; med++) a += hist[med];
+  // เทียบกับความสว่างรอบข้าง เพื่อให้รูปถ่ายที่แสงไม่เท่ากันยังแยกเส้นได้
+  const W1 = w + 1, I = new Uint32Array(W1 * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let row = 0;
+    for (let x = 0; x < w; x++) { row += lum[y * w + x]; I[(y + 1) * W1 + x + 1] = I[y * W1 + x + 1] + row; }
+  }
+  const m = new Uint8Array(n), R = 24, base = med * 0.8;
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - R), y1 = Math.min(h, y + R + 1);
+    for (let x = 0; x < w; x++) {
+      const v = lum[y * w + x];
+      if (v < base) { m[y * w + x] = 1; continue; }
+      const x0 = Math.max(0, x - R), x1 = Math.min(w, x + R + 1);
+      const s = I[y1 * W1 + x1] - I[y0 * W1 + x1] - I[y1 * W1 + x0] + I[y0 * W1 + x0];
+      if (v < 0.86 * s / ((x1 - x0) * (y1 - y0))) m[y * w + x] = 1;
+    }
+  }
+  return { m, w, h, canvas: c };
+}
+function transposeMask(m, w, h) {
+  const t = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) t[x * h + y] = m[y * w + x];
+  return t;
+}
+// หาเส้นแนวนอนยาว ๆ คืน [{p: ตำแหน่ง y, a, b: ช่วง x, th: ความหนา}]
+function findLines(m, w, h, minRun, maxTh, plain) {
+  const done = []; let active = [];
+  for (let y = 0; y < h; y++) {
+    const runs = []; let x = 0;
+    while (x < w) {
+      if (!m[y * w + x]) { x++; continue; }
+      let s = x, e = x, miss = 0;
+      for (x++; x < w && miss <= 2; x++) { if (m[y * w + x]) { e = x; miss = 0; } else miss++; }
+      if (e - s + 1 >= minRun) runs.push([s, e]);
+    }
+    const next = [];
+    for (const [a, b] of runs) {
+      let seg = active.find(s => !s.t && Math.min(b, s.b) - Math.max(a, s.a) > 0.5 * Math.min(b - a, s.b - s.a));
+      if (seg) { seg.t = true; seg.a = Math.min(seg.a, a); seg.b = Math.max(seg.b, b); seg.sum += y * (b - a); seg.n += b - a; seg.y1 = y; }
+      else seg = { a, b, sum: y * (b - a), n: b - a, y0: y, y1: y, t: true };
+      next.push(seg);
+    }
+    for (const s of active) if (!s.t) done.push(s);
+    for (const s of next) s.t = false;
+    active = next;
+  }
+  done.push(...active);
+  // เส้นหนาต้องทึบเต็มพื้นที่ แถวตัวอักษรจะมีช่องว่างมาก
+  const solid = s => {
+    const th = s.y1 - s.y0 + 1;
+    if (th < 4) return true;
+    if (s.b - s.a < 2 * th) return false;
+    let dark = 0;
+    for (let y = s.y0; y <= s.y1; y++) for (let x = s.a; x <= s.b; x++) dark += m[y * w + x];
+    return dark >= 0.8 * th * (s.b - s.a + 1);
+  };
+  const lines = done.filter(s => s.y1 - s.y0 < maxTh && s.n > 0 && (plain || solid(s)))
+    .map(s => ({ p: s.sum / s.n, a: s.a, b: s.b, th: s.y1 - s.y0 + 1 })).sort((u, v) => u.p - v.p);
+  const merged = [];                  // รวมเส้นแนวเดียวกันที่ขาดเล็กน้อย
+  for (let i = 0; i < lines.length;) {
+    let j = i; const grp = [];
+    while (j < lines.length && lines[j].p - lines[i].p <= 1.5) grp.push(lines[j++]);
+    grp.sort((u, v) => u.a - v.a);
+    let cur = null;
+    for (const l of grp) {
+      if (cur && l.a - cur.b <= 6) { cur.b = Math.max(cur.b, l.b); cur.th = Math.max(cur.th, l.th); }
+      else { cur = { ...l }; merged.push(cur); }
+    }
+    i = j;
+  }
+  return merged.sort((u, v) => u.p - v.p);
+}
+// ระยะห่างเส้นคู่ที่พบมาก = ความหนาผนังหรือความกว้างคานบนแปลน
+function lineSpacing(all, maxW) {
+  const hist = new Float64Array(maxW + 2);
+  for (const L of all) for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+    const d = L[j].p - L[i].p;
+    if (d > maxW) break;
+    if (d < 3) continue;
+    const ov = Math.min(L[i].b, L[j].b) - Math.max(L[i].a, L[j].a);
+    if (ov > 0) hist[Math.round(d)] += ov;
+  }
+  const sm = hist.map((v, i) => v + (hist[i - 1] || 0) + (hist[i + 1] || 0));
+  const top = Math.max(...sm);
+  if (!top) return null;
+  const peak = (d, f) => sm[d] >= f * top && sm[d] >= sm[d - 1] && sm[d] >= (sm[d + 1] || 0);
+  let main = 0;                       // ระยะที่เด่นและแคบที่สุด ระยะเส้นบอกระยะถึงผนังจะกว้างกว่านี้มาก
+  for (let d = 3; d <= maxW && !main; d++) if (peak(d, 0.7)) main = d;
+  if (!main) return null;
+  // ผนังหนาหลายขนาด หรือมีเส้นกริดกลางคาน ให้ใช้ระยะที่กว้างกว่าซึ่งไม่เกินราวสองเท่า
+  for (let d = Math.min(maxW, Math.round(main * 2.15)); d > main; d--) if (peak(d, 0.3)) return d;
+  return main;
+}
+// ผนัง = เส้นหนา หรือเส้นคู่ที่ขนานกัน รองรับผนังหลายความหนาในแบบเดียว
+function findWalls(L, maxW, thickMin, minLen) {
+  const raw = [], paired = new Set();
+  for (let i = 0; i < L.length; i++) {
+    for (let j = i + 1; j < L.length; j++) {
+      const d = L[j].p - L[i].p;
+      if (d > maxW) break;
+      if (d < Math.max(3, L[i].th, L[j].th)) continue;
+      const a = Math.max(L[i].a, L[j].a), b = Math.min(L[i].b, L[j].b);
+      if (b - a >= minLen) { raw.push({ c: (L[i].p + L[j].p) / 2, a, b, d }); paired.add(L[i]); paired.add(L[j]); }
+    }
+  }
+  for (const l of L) if (l.th >= thickMin && l.b - l.a >= minLen && !paired.has(l)) raw.push({ c: l.p, a: l.a, b: l.b, d: l.th });
+  raw.sort((u, v) => u.c - v.c);
+  const out = [];
+  for (let i = 0; i < raw.length;) {
+    let j = i + 1;
+    while (j < raw.length && raw[j].c - raw[j - 1].c <= Math.max(raw[j].d, raw[j - 1].d) * 0.6 + 1.5) j++;
+    const grp = raw.slice(i, j); i = j;
+    if (grp[grp.length - 1].c - grp[0].c > maxW * 1.2) continue;      // ลายแรเงาหรือกระเบื้อง ไม่ใช่ผนัง
+    const wsum = grp.reduce((s, r) => s + r.b - r.a, 0);
+    const c = grp.reduce((s, r) => s + r.c * (r.b - r.a), 0) / wsum;
+    const d = Math.max(...grp.map(r => r.d));
+    grp.sort((u, v) => u.a - v.a);
+    let cur = null;
+    for (const r of grp) {
+      if (cur && r.a - cur.b <= d * 1.6) cur.b = Math.max(cur.b, r.b);
+      else { cur = { c, a: r.a, b: r.b, d }; out.push(cur); }
+    }
+  }
+  // เส้นซ้ำเป็นจังหวะเท่า ๆ กัน เช่น ลูกนอนบันได ไม่นับเป็นผนัง
+  out.sort((u, v) => u.c - v.c);
+  const over = (u, v) => Math.min(u.b, v.b) - Math.max(u.a, v.a) > 0.5 * Math.min(u.b - u.a, v.b - v.a);
+  const drop = new Set();
+  for (let i = 0; i < out.length; i++) {
+    const near = [];
+    for (let j = i + 1; j < out.length && out[j].c - out[i].c <= maxW * 3; j++) if (out[j].c - out[i].c > 3 && over(out[i], out[j])) near.push(out[j]);
+    for (let p = 0; p < near.length; p++) for (let q = p + 1; q < near.length; q++) {
+      const s1 = near[p].c - out[i].c, s2 = near[q].c - near[p].c;
+      if (Math.abs(s1 - s2) <= s1 * 0.15 + 1) { drop.add(out[i]); drop.add(near[p]); drop.add(near[q]); }
+    }
+  }
+  return out.filter(s => !drop.has(s));
+}
+// แนวกริด = ตำแหน่งที่มีเส้นรวมกันยาวมาก
+function findAxes(L, span) {
+  const out = [];
+  for (let i = 0; i < L.length;) {
+    let j = i, sum = 0, wsum = 0;
+    while (j < L.length && L[j].p - L[i].p <= 2) { const n = L[j].b - L[j].a; sum += n; wsum += n * L[j].p; j++; }
+    if (sum >= span * 0.08) out.push(wsum / sum);
+    i = j;
+  }
+  return out;
+}
+// รวมผนังที่แนวใกล้กันให้อยู่แนวเดียว
+function snapAxes(strips, tol) {
+  const st = [...strips].sort((u, v) => u.c - v.c), axes = [];
+  for (let i = 0; i < st.length;) {
+    let j = i + 1;
+    while (j < st.length && st[j].c - st[j - 1].c <= tol) j++;
+    const grp = st.slice(i, j); i = j;
+    const c = grp.reduce((s, r) => s + r.c * (r.b - r.a), 0) / grp.reduce((s, r) => s + r.b - r.a, 0);
+    for (const r of grp) r.ax = axes.length;
+    axes.push(c);
+  }
+  return axes;
+}
+function axisCover(strips, n, reach, gap) {
+  const iv = Array.from({ length: n }, () => []);
+  for (const s of strips) iv[s.ax].push([s.a - reach, s.b + reach]);
+  return iv.map(list => {               // เชื่อมช่องประตูหน้าต่างในแนวผนังเดียวกัน
+    list.sort((p, q) => p[0] - q[0]);
+    const out = [];
+    for (const [a, b] of list) {
+      const l = out[out.length - 1];
+      if (l && a - l[1] <= gap) l[1] = Math.max(l[1], b); else out.push([a, b]);
+    }
+    return out;
+  });
+}
+const covered = (iv, lo, hi) => {
+  let s = 0;
+  for (const [a, b] of iv) s += Math.max(0, Math.min(b, hi) - Math.max(a, lo));
+  return s / (hi - lo);
+};
+
+function buildRooms(HS, VS, size, gapMul, gapMin) {
+  if (HS.length < 2 || VS.length < 2) return null;
+  const all = [...HS, ...VS].sort((u, v) => u.d - v.d);
+  const medD = Math.max(all[all.length >> 1].d, size * 0.004);
+  const tol = Math.max(3, medD * 0.7);
+  const X = snapAxes(VS, tol), Y = snapAxes(HS, tol);
+  const gap = Math.max(gapMin, medD * gapMul), reach = medD * 1.2;
+  const ivV = axisCover(VS, X.length, reach, gap), ivH = axisCover(HS, Y.length, reach, gap);
+  const nx = X.length - 1, ny = Y.length - 1;
+  if (nx < 1 || ny < 1) return null;
+  const id = (i, j) => j * nx + i, N = nx * ny;
+  const vW = (i, j) => covered(ivV[i], Y[j], Y[j + 1]) >= 0.5;     // ผนังตั้งที่แนว i ของแถว j
+  const hW = (i, j) => covered(ivH[j], X[i], X[i + 1]) >= 0.5;     // ผนังนอนที่แนว j ของคอลัมน์ i
+  const open = (i, j, di, dj) =>
+    di === 1 ? !vW(i + 1, j) : di === -1 ? !vW(i, j) : dj === 1 ? !hW(i, j + 1) : !hW(i, j);
+  const label = new Int32Array(N).fill(-1);
+  const flood = (seeds, lab) => {
+    const q = [...seeds];
+    for (const [i, j] of q) label[id(i, j)] = lab;
+    while (q.length) {
+      const [i, j] = q.pop();
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= nx || b >= ny || label[id(a, b)] !== -1 || !open(i, j, di, dj)) continue;
+        label[id(a, b)] = lab; q.push([a, b]);
+      }
+    }
+  };
+  const seeds = [];                     // ช่องที่รั่วออกนอกอาคาร
+  for (let j = 0; j < ny; j++) { if (!vW(0, j)) seeds.push([0, j]); if (!vW(nx, j)) seeds.push([nx - 1, j]); }
+  for (let i = 0; i < nx; i++) { if (!hW(i, 0)) seeds.push([i, 0]); if (!hW(i, ny)) seeds.push([i, ny - 1]); }
+  flood(seeds.filter(([i, j]) => label[id(i, j)] === -1).filter((v, n, a) => a.findIndex(u => u[0] === v[0] && u[1] === v[1]) === n), 0);
+  let next = 1;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (label[id(i, j)] === -1) flood([[i, j]], next++);
+
+  let regs = [];
+  for (let l = 1; l < next; l++) {
+    const cells = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (label[id(i, j)] === l) cells.push([i, j]);
+    const area = cells.reduce((s, [i, j]) => s + (X[i + 1] - X[i]) * (Y[j + 1] - Y[j]), 0);
+    regs.push({ l, cells, area });
+  }
+  // ช่องที่ล้อมห้องอื่นอยู่ คือพื้นที่นอกอาคารในกรอบแบบ ไม่ใช่ห้อง
+  const surrounds = r => {
+    const seen = new Uint8Array(N), q = [];
+    const push = (i, j) => { if (label[id(i, j)] !== r.l && !seen[id(i, j)]) { seen[id(i, j)] = 1; q.push([i, j]); } };
+    for (let i = 0; i < nx; i++) { push(i, 0); push(i, ny - 1); }
+    for (let j = 0; j < ny; j++) { push(0, j); push(nx - 1, j); }
+    while (q.length) {
+      const [i, j] = q.pop();
+      if (i > 0) push(i - 1, j); if (i < nx - 1) push(i + 1, j);
+      if (j > 0) push(i, j - 1); if (j < ny - 1) push(i, j + 1);
+    }
+    for (let n = 0; n < N; n++) if (label[n] !== r.l && !seen[n]) return true;
+    return false;
+  };
+  regs.sort((u, v) => v.area - u.area);
+  regs = regs.filter(r => {
+    if (!surrounds(r)) return true;
+    for (const [i, j] of r.cells) label[id(i, j)] = 0;
+    return false;
+  });
+  // ตัดช่องแคบหรือเล็กเกินเป็นห้อง เช่น ช่องท่อ
+  regs = regs.filter(r => {
+    const xs = r.cells.map(c => c[0]), ys = r.cells.map(c => c[1]);
+    const w = X[Math.max(...xs) + 1] - X[Math.min(...xs)], h = Y[Math.max(...ys) + 1] - Y[Math.min(...ys)];
+    return Math.min(w, h) > medD * 2.5 && r.area > medD * medD * 25;
+  });
+  // ห้องที่ติดกันคืออาคารเดียวกัน กลุ่มเล็กที่ลอยอยู่มักเป็นตารางหรือกรอบชื่อแบบ
+  const byLab = new Map(regs.map(r => [r.l, r]));
+  const parent = new Map(regs.map(r => [r.l, r.l]));
+  const root = l => { while (parent.get(l) !== l) l = parent.get(l); return l; };
+  for (const r of regs) for (const [i, j] of r.cells) for (const [a, b] of [[i + 1, j], [i, j + 1]]) {
+    if (a >= nx || b >= ny) continue;
+    const o = label[id(a, b)];
+    if (o !== r.l && byLab.has(o)) parent.set(root(r.l), root(o));
+  }
+  const gsum = new Map();
+  for (const r of regs) gsum.set(root(r.l), (gsum.get(root(r.l)) || 0) + r.area);
+  const big = Math.max(0, ...gsum.values());
+  regs = regs.filter(r => gsum.get(root(r.l)) >= big * 0.25);
+  if (!regs.length) return null;
+
+  const rooms = regs.map(r => {
+    const inR = (i, j) => i >= 0 && j >= 0 && i < nx && j < ny && label[id(i, j)] === r.l;
+    const rects = [], rows = new Map();
+    for (const [i, j] of r.cells) { if (!rows.has(j)) rows.set(j, []); rows.get(j).push(i); }
+    for (const j of [...rows.keys()].sort((a, b) => a - b)) {
+      const list = rows.get(j).sort((a, b) => a - b);
+      for (let s = 0; s < list.length;) {
+        let e = s; while (e + 1 < list.length && list[e + 1] === list[e] + 1) e++;
+        const i0 = list[s], i1 = list[e] + 1;
+        const up = rects.find(q => q.i0 === i0 && q.i1 === i1 && q.j1 === j);
+        if (up) up.j1 = j + 1; else rects.push({ i0, i1, j0: j, j1: j + 1 });
+        s = e + 1;
+      }
+    }
+    const outline = [];
+    for (const [i, j] of r.cells) {
+      if (!inR(i - 1, j)) outline.push([{ x: X[i], y: Y[j] }, { x: X[i], y: Y[j + 1] }]);
+      if (!inR(i + 1, j)) outline.push([{ x: X[i + 1], y: Y[j] }, { x: X[i + 1], y: Y[j + 1] }]);
+      if (!inR(i, j - 1)) outline.push([{ x: X[i], y: Y[j] }, { x: X[i + 1], y: Y[j] }]);
+      if (!inR(i, j + 1)) outline.push([{ x: X[i], y: Y[j + 1] }, { x: X[i + 1], y: Y[j + 1] }]);
+    }
+    return { cells: r.cells, rects, outline, top: Y[rects[0].j0], left: X[rects[0].i0] };
+  });
+  const rowTol = medD * 3;
+  rooms.sort((a, b) => Math.abs(a.top - b.top) > rowTol ? a.top - b.top : a.left - b.left);
+  return { rooms, X, Y, medD };
+}
+
+function detectRooms() {
+  const src = planSource(), { m, w, h, canvas } = rasterMask(src);
+  const size = Math.max(w, h);
+  const minRun = Math.round(size * 0.02), maxTh = Math.round(size * 0.035);   // ต้องยาวกว่าความสูงตัวเลขในแบบ
+  const thickMin = Math.max(5, Math.ceil(3 * src.up));   // บางกว่านี้คือเส้นบอกระยะที่หนาขึ้นจากการย่อขยายรูป
+  const mT = transposeMask(m, w, h);
+  const HL = findLines(m, w, h, minRun, maxTh), VL = findLines(mT, h, w, minRun, maxTh);
+  const sp = lineSpacing([HL, VL], maxTh);
+  const maxW = sp ? Math.round(sp * 1.35) + 2 : Math.round(size * 0.012);
+  let HS = findWalls(HL, maxW, thickMin, minRun), VS = findWalls(VL, maxW, thickMin, minRun);
+  let res = buildRooms(HS, VS, size, 8, size * 0.02);
+  if (!res) {                           // แปลนเขียนผนังเส้นเดียว ใช้เส้นยาวทุกเส้นเป็นผนัง
+    const asWall = l => ({ c: l.p, a: l.a, b: l.b, d: Math.max(2, l.th) });
+    const longL = l => l.b - l.a >= size * 0.03;
+    HS = HL.filter(longL).map(asWall); VS = VL.filter(longL).map(asWall);
+    res = buildRooms(HS, VS, size, 0, size * 0.06);
+  }
+  const out = { src, canvas, HL, VL, rooms: [], X: [], Y: [], xs: [], ys: [], medD: 0 };
+  if (!res) return out;
+  // แนวที่ใช้เทียบเลขบอกระยะ: แนวผนัง และเส้นยาวอื่นที่ไม่ใช่ขอบผนัง
+  const addAxes = (walls, extra) => [...walls, ...extra.filter(a => !walls.some(c => Math.abs(c - a) <= res.medD))].sort((u, v) => u - v);
+  return { ...out, ...res, xs: addAxes(res.X, findAxes(VL, h)), ys: addAxes(res.Y, findAxes(HL, w)) };
+}
+
+let ocrBase = null;     // โฟลเดอร์ ocr ข้างหน้าเว็บ ถ้าไม่มีจะโหลดจากอินเทอร์เน็ต
+async function findOcrBase() {
+  if (ocrBase !== null) return ocrBase;
+  try {
+    const r = await fetch('ocr/worker-wrap.js', { method: 'HEAD' });
+    ocrBase = r.ok ? new URL('ocr/', location.href).href : '';
+  } catch { ocrBase = ''; }
+  return ocrBase;
+}
+const addScript = src => new Promise((res, rej) => {
+  const s = document.createElement('script');
+  s.src = src; s.onload = res; s.onerror = () => rej(new Error('โหลดตัวอ่านตัวเลขไม่ได้'));
+  document.head.appendChild(s);
+});
+async function loadOcr() {
+  if (window.Tesseract) return;
+  const base = await findOcrBase();
+  await addScript(base ? base + 'tesseract.min.js' : 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+}
+
+const newWorker = () => Tesseract.createWorker('eng', 1, ocrBase
+  ? { workerPath: ocrBase + 'worker-wrap.js', corePath: ocrBase, workerBlobURL: false } : {});
+
+function ocrCanvas(det) {
+  // รูปเล็กที่ถูกขยายมาแล้วมีตัวเลขใหญ่พอ ขยายซ้ำจะอ่านแย่ลง
+  const UP = det.src.up > 1.3 ? 1 : 2, src = det.canvas, c = document.createElement('canvas');
+  const W2 = src.width * UP, H2 = src.height * UP, longL = Math.max(src.width, src.height) * 0.06;
+  c.width = W2; c.height = H2;
+  const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+  g.drawImage(src, 0, 0, W2, H2);
+  // ลบเส้นยาวออกก่อน ไม่ให้เส้นบอกระยะติดกับตัวเลข เส้นสั้นอาจเป็นขีดของตัวเลขเอง จึงเก็บไว้
+  g.fillStyle = '#fff';
+  for (const l of det.HL) if (l.b - l.a >= longL) { const t = l.th + 3; g.fillRect(l.a * UP, (l.p - t / 2) * UP, (l.b - l.a) * UP, t * UP); }
+  for (const l of det.VL) if (l.b - l.a >= longL) { const t = l.th + 3; g.fillRect((l.p - t / 2) * UP, l.a * UP, t * UP, (l.b - l.a) * UP); }
+  return { c, UP, W2, H2 };
+}
+
+// อ่านตัวเลขบนแบบสองรอบ: แนวนอน แล้วหมุนรูปอ่านเลขที่เขียนแนวตั้ง
+async function ocrWords(det) {
+  await loadOcr();
+  const { c, UP, W2, H2 } = ocrCanvas(det);
+  const rot = document.createElement('canvas');
+  rot.width = H2; rot.height = W2;
+  const q = rot.getContext('2d');
+  q.translate(H2, 0); q.rotate(Math.PI / 2); q.drawImage(c, 0, 0);
+  const worker = await newWorker();
+  const out = [];
+  try {
+    await worker.setParameters({ tessedit_char_whitelist: '0123456789.', tessedit_pageseg_mode: '11' });
+    const a = await worker.recognize(c);
+    for (const wd of a.data.words || []) out.push({ text: wd.text, x: (wd.bbox.x0 + wd.bbox.x1) / 2 / UP, y: (wd.bbox.y0 + wd.bbox.y1) / 2 / UP });
+    hint('กำลังอ่านเลขบอกระยะแนวตั้ง...');
+    const b = await worker.recognize(rot);
+    for (const wd of b.data.words || []) {
+      const X = (wd.bbox.x0 + wd.bbox.x1) / 2, Y = (wd.bbox.y0 + wd.bbox.y1) / 2;
+      out.push({ text: wd.text, x: Y / UP, y: (H2 - X) / UP });
+    }
+  } finally { await worker.terminate(); }
+  return out;
+}
+
+// แปลงข้อความเป็นระยะ (เมตร) เลขไม่มีจุดอาจเป็น ซม. หรือ มม. ให้การโหวตเป็นตัวตัดสิน
+function parseDim(text) {
+  const t = text.replace(/[^\d.]/g, '');
+  if (/^\d{1,2}\.\d{1,3}$/.test(t)) return [parseFloat(t)];
+  if (/^\d{3,5}$/.test(t)) { const n = parseInt(t, 10); return n >= 100000 ? [] : [n / 100, n / 1000]; }
+  return [];
+}
+
+// เลขบอกระยะจะอยู่กึ่งกลางระหว่างแนวสองแนว จึงโหวตหาอัตราส่วนพิกเซลต่อเมตรจากเลขทั้งหมด
+function readScale(det, words) {
+  const nums = [];
+  for (const wd of words) {
+    const vals = parseDim(wd.text).filter(v => v > 0);
+    if (vals.length) nums.push({ vals, cx: wd.x, cy: wd.y });
+  }
+  const votes = [];
+  const vote = (arr, center, n, axis) => {
+    for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
+      if (Math.abs((arr[i] + arr[j]) / 2 - center) > 12) continue;
+      for (const v of n.vals) votes.push({ r: (arr[j] - arr[i]) / v, d: arr[j] - arr[i], v, n, axis, i, j });
+    }
+  };
+  for (const n of nums) { vote(det.xs, n.cx, n, 'x'); vote(det.ys, n.cy, n, 'y'); }
+  let best = null;
+  for (const a of votes) {
+    const grp = votes.filter(b => Math.abs(b.r / a.r - 1) <= 0.02);
+    const texts = new Set(grp.map(b => b.n)).size;
+    const vs = grp.map(b => b.v).sort((p, q) => p - q), med = vs[vs.length >> 1];
+    const sane = med >= 0.8 && med <= 15 ? 1 : 0;   // ห้องปกติยาวไม่กี่เมตร ใช้ตัดสินระหว่าง ซม. กับ มม.
+    if (!best || texts > best.texts || (texts === best.texts && sane > best.sane)) best = { texts, sane, grp };
+  }
+  if (!best || best.texts < 2) return { ratio: null };
+  // ระยะยาวคลาดเคลื่อนน้อยที่สุด จึงใช้เฉพาะระยะที่ยาวใกล้เคียงระยะยาวสุดที่อ่านได้
+  const maxD = Math.max(...best.grp.map(b => b.d));
+  const longest = best.grp.filter(b => b.d >= 0.7 * maxD);
+  const ratio = longest.reduce((s, b) => s + b.r, 0) / longest.length;
+  // เลขแต่ละตัวผูกกับแนวคู่ที่ตรงที่สุด
+  const pick = new Map();
+  for (const b of votes) {
+    const err = Math.abs(b.d / ratio - b.v);
+    if (err > Math.max(0.06, b.v * 0.02)) continue;
+    const key = b.axis + nums.indexOf(b.n), old = pick.get(key);
+    if (!old || err < old.err) pick.set(key, { ...b, err });
+  }
+  const edges = { x: [], y: [] };
+  for (const b of pick.values()) edges[b.axis].push({ i: b.i, j: b.j, v: b.v });
+  return { ratio, texts: best.texts, edges };
+}
+
+// พิกัดจริงของแนว (เมตร) ไล่จากเลขบอกระยะในแบบ g = กลุ่มเลขที่เชื่อมกัน แนวที่ไม่มีเลขเป็น null
+function exactCoords(axes, edges, ratio) {
+  const adj = axes.map(() => []);
+  for (const e of edges) { adj[e.i].push([e.j, e.v]); adj[e.j].push([e.i, -e.v]); }
+  adj.forEach(a => a.sort((p, q) => Math.abs(p[1]) - Math.abs(q[1])));
+  const c = axes.map(() => null), grp = axes.map(() => null);
+  for (let s = 0; s < axes.length; s++) {
+    if (c[s] != null || !adj[s].length) continue;
+    let t = -1;                        // ชุดเลขที่ไม่เชื่อมกัน ให้ต่อด้วยระยะวัดปัด 0.05 ม.
+    for (let i = 0; i < axes.length; i++) if (c[i] != null && (t < 0 || Math.abs(axes[i] - axes[s]) < Math.abs(axes[t] - axes[s]))) t = i;
+    c[s] = t < 0 ? 0 : c[t] + Math.round((axes[s] - axes[t]) / ratio / 0.05) * 0.05;
+    grp[s] = s;
+    const q = [s];
+    while (q.length) {
+      const i = q.shift();
+      for (const [j, v] of adj[i]) if (c[j] == null) { c[j] = c[i] + v; grp[j] = s; q.push(j); }
+    }
+  }
+  return { c, grp };
+}
+// พิกัดจริงของแนวผนัง ใช้แนวที่มีเลขซึ่งอยู่ใกล้ ถ้าไม่มีให้ประมาณจากรูปปัด 0.05 ม.
+function wallCoords(walls, axes, edges, ratio, tol) {
+  const { c, grp } = exactCoords(axes, edges, ratio);
+  const known = axes.map((a, i) => i).filter(i => c[i] != null);
+  return walls.map(v => {
+    let best = -1, bd = tol;
+    for (const i of known) { const d = Math.abs(axes[i] - v); if (d <= bd) { bd = d; best = i; } }
+    if (best >= 0) return { c: c[best], g: grp[best] };
+    let t = -1;
+    for (const i of known) if (t < 0 || Math.abs(axes[i] - v) < Math.abs(axes[t] - v)) t = i;
+    const base = t < 0 ? 0 : c[t], from = t < 0 ? walls[0] : axes[t];
+    return { c: base + Math.round((v - from) / ratio / 0.05) * 0.05, g: null };
+  });
+}
+// ใช้ความยาวจากเลขในแบบ ห้องที่ไม่มีเลขครบใช้ระยะวัดปัด 0.05 ม. และทำเครื่องหมายไว้
+function applyPlanDims(det, sc) {
+  const tol = det.medD * 1.5;
+  const cx = wallCoords(det.X, det.xs, sc.edges.x, sc.ratio, tol), cy = wallCoords(det.Y, det.ys, sc.edges.y, sc.ratio, tol);
+  const sure = (arr, a, b) => arr[a].g != null && arr[a].g === arr[b].g;
+  const r3 = v => Math.round(Math.abs(v) * 1000) / 1000;
+  let exact = 0, est = 0;
+  for (const r of S.rooms) {
+    if (!r.cells) continue;
+    if (r.rect) {
+      const q = r.box;
+      r.dx = r3(cx[q.i1].c - cx[q.i0].c); r.dy = r3(cy[q.j1].c - cy[q.j0].c);
+      r.plan = r.dx * r.dy;
+      r.est = !sure(cx, q.i0, q.i1) || !sure(cy, q.j0, q.j1);
+    } else {
+      r.plan = 0; r.est = false;
+      for (const [i, j] of r.cells) {
+        r.plan += Math.abs(cx[i + 1].c - cx[i].c) * Math.abs(cy[j + 1].c - cy[j].c);
+        if (!sure(cx, i, i + 1) || !sure(cy, j, j + 1)) r.est = true;
+      }
+    }
+    if (r.est) est++; else exact++;
+  }
+  return { exact, est };
+}
+
+/* ---------- หาคานแบบโปรแกรมคำนวณคิวปูนเทคาน ---------- */
+// ระยะห่างเส้นคู่ที่พบมากที่สุด = ความกว้างคานบนแปลน
+function beamSpacing(all, maxW) {
+  const hist = new Float64Array(maxW + 2);
+  for (const L of all) for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+    const d = L[j].p - L[i].p;
+    if (d > maxW) break;
+    if (d < 3) continue;
+    const ov = Math.min(L[i].b, L[j].b) - Math.max(L[i].a, L[j].a);
+    if (ov > 0) hist[Math.round(d)] += ov;
+  }
+  const sm = hist.map((v, i) => v + (hist[i - 1] || 0) + (hist[i + 1] || 0));
+  const top = Math.max(...sm);
+  if (!top) return null;
+  for (let d = maxW; d >= 3; d--) {   // ถ้ามีเส้นกริดกลางคาน ให้ใช้ระยะขอบถึงขอบ ไม่ใช่ขอบถึงกลาง
+    if (sm[d] >= 0.3 * top && sm[d] >= sm[d - 1] && sm[d] >= (sm[d + 1] || 0)) return d;
+  }
+  return null;
+}
+function findStrips(L, sp) {
+  const raw = [], tol = Math.max(1.5, sp * 0.2);
+  for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+    const d = L[j].p - L[i].p;
+    if (d > sp + tol) break;
+    if (d < sp - tol) continue;
+    const a = Math.max(L[i].a, L[j].a), b = Math.min(L[i].b, L[j].b);
+    if (b - a >= sp * 1.5) raw.push({ c: (L[i].p + L[j].p) / 2, a, b });
+  }
+  raw.sort((u, v) => u.c - v.c);
+  const out = [];
+  for (let i = 0; i < raw.length;) {
+    let j = i; const grp = [];
+    while (j < raw.length && raw[j].c - raw[i].c <= sp / 2) grp.push(raw[j++]);
+    const c = grp.reduce((s, r) => s + r.c * (r.b - r.a), 0) / grp.reduce((s, r) => s + r.b - r.a, 0);
+    grp.sort((u, v) => u.a - v.a);
+    let cur = null;
+    for (const r of grp) {
+      if (cur && r.a - cur.b <= sp * 1.6) cur.b = Math.max(cur.b, r.b);
+      else { cur = { c, a: r.a, b: r.b }; out.push(cur); }
+    }
+    i = j;
+  }
+  return out;
+}
+function detectBeams() {
+  const src = planSource(), { m, w, h, canvas } = rasterMask(src), k = src.k;
+  const minRun = Math.max(14, Math.round(Math.max(w, h) * 0.012));
+  const mT = transposeMask(m, w, h);
+  const HL = findLines(m, w, h, minRun, 6, true), VL = findLines(mT, h, w, minRun, 6, true);
+  const sp = beamSpacing([HL, VL], Math.round(Math.max(w, h) * 0.018));
+  if (!sp) return { src, k, canvas, HL, VL, beams: [], xs: [], ys: [], sp: 0 };
+  const HS = findStrips(HL, sp), VS = findStrips(VL, sp);
+  let ys = findAxes(HL, w), xs = findAxes(VL, h);
+
+  const nearest = (arr, v, r) => { let best = null, bd = r; for (const a of arr) { const d = Math.abs(a - v); if (d <= bd) { bd = d; best = a; } } return best; };
+  for (const s of HS) { const a = nearest(ys, s.c, sp * 0.25); if (a != null) s.c = a; }
+  for (const s of VS) { const a = nearest(xs, s.c, sp * 0.25); if (a != null) s.c = a; }
+  // แนวกริดที่ใช้ต่อ: เส้นกลางคาน และเส้นอื่นที่ไม่ใช่ขอบคาน
+  const clean = (axes, strips) => {
+    const cs = [...new Set(strips.map(s => s.c))];
+    return [...cs, ...axes.filter(a => !cs.some(c => Math.abs(c - a) <= sp))].sort((u, v) => u - v);
+  };
+  xs = clean(xs, VS); ys = clean(ys, HS);
+
+  // ต่อปลายคานถึงเส้นกลางคานที่มาชน หรือแนวกริด (ระยะศูนย์กลางถึงศูนย์กลาง)
+  const reach = sp * 1.6;
+  const extend = (S1, S2, axes) => {
+    for (const s of S1) {
+      const crossing = S2.filter(t => t.a - reach <= s.c && s.c <= t.b + reach).map(t => t.c);
+      const fix = v => { let r = nearest(crossing, v, reach); if (r == null) r = nearest(axes, v, sp); return r == null ? v : r; };
+      s.a0 = fix(s.a); s.b0 = fix(s.b);
+    }
+  };
+  extend(HS, VS, xs); extend(VS, HS, ys);
+  for (const s of [...HS, ...VS]) { s.a = s.a0; s.b = s.b0; }
+
+  // คานจริงต้องต่อกับคานอื่น ตัดของที่ลอยเดี่ยว เช่น ภาพประกอบมุมแบบ
+  const touches = (s, S2) => S2.some(t => t.a - reach <= s.c && s.c <= t.b + reach && s.a - reach <= t.c && t.c <= s.b + reach);
+  const H2 = HS.filter(s => touches(s, VS) && s.b - s.a > sp), V2 = VS.filter(s => touches(s, HS) && s.b - s.a > sp);
+
+  // แบ่งเป็นช่วง ๆ ตรงจุดตัด เพื่อให้ลบเฉพาะช่วงที่ผิดได้
+  const beams = [];
+  const split = (s, S2, mk) => {
+    const cuts = [s.a, ...S2.filter(t => t.a - 1 <= s.c && s.c <= t.b + 1 && t.c > s.a + sp && t.c < s.b - sp).map(t => t.c), s.b].sort((u, v) => u - v);
+    for (let i = 0; i + 1 < cuts.length; i++) beams.push(mk(cuts[i], cuts[i + 1]));
+  };
+  for (const s of H2) split(s, V2, (a, b) => ({ a: { x: a / k, y: s.c / k }, b: { x: b / k, y: s.c / k } }));
+  for (const s of V2) split(s, H2, (a, b) => ({ a: { x: s.c / k, y: a / k }, b: { x: s.c / k, y: b / k } }));
+  return { src, k, canvas, beams, xs, ys, sp, HL, VL };
+}
+function beamLength(b) {
+  if (b.manual != null) return b.manual;
+  if (b.plan != null) return b.plan;
+  if (!S.mPerUnit) return null;
+  return dist(b.a, b.b) * S.mPerUnit;
+}
+function addBeam(a, b, auto) {
+  S.beams.push({ name: 'B' + S.beamNo++, a, b, manual: null, plan: null, est: false, auto: !!auto });
+}
+// ใช้ความยาวจากเลขในแบบ คานที่ปลายไม่ตรงแนวที่มีเลข ใช้ระยะวัดปัด 0.05 ม.
+function applyBeamDims(det, sc) {
+  const cx = exactCoords(det.xs, sc.edges.x, sc.ratio).c, cy = exactCoords(det.ys, sc.edges.y, sc.ratio).c;
+  const near = (axes, c, v) => {
+    let best = -1, bd = det.sp * 1.2;
+    axes.forEach((a, i) => { if (c[i] != null && Math.abs(a - v) <= bd) { bd = Math.abs(a - v); best = i; } });
+    return best;
+  };
+  for (const b of S.beams) {
+    if (!b.auto) continue;
+    const horiz = Math.abs(b.a.y - b.b.y) < Math.abs(b.a.x - b.b.x);
+    const axes = horiz ? det.xs : det.ys, c = horiz ? cx : cy, key = horiz ? 'x' : 'y';
+    const i = near(axes, c, b.a[key] * det.k), j = near(axes, c, b.b[key] * det.k);
+    if (i >= 0 && j >= 0 && i !== j) {
+      b.a[key] = axes[i] / det.k; b.b[key] = axes[j] / det.k;
+      b.plan = Math.round(Math.abs(c[j] - c[i]) * 1000) / 1000; b.est = false;
+    } else {
+      b.plan = Math.round(dist(b.a, b.b) * S.mPerUnit / 0.05) * 0.05; b.est = true;
+    }
+  }
+}
+
+/* ---------- ห้อง = ช่องที่คานล้อมรอบ ยาว × กว้าง มาจากความยาวคาน ---------- */
+const roomKey = r => { const b = bbox(r.parts.flat()); return [b.x0, b.y0, b.x1, b.y1].map(Math.round).join(); };
+// พิกัดจริงของแนวคาน ไล่จากความยาวคานที่ต่อกัน ใช้กับห้องรูปตัวแอล
+function axisReal(axes, strips, tol) {
+  const idx = v => { let b = -1, d = tol; axes.forEach((a, i) => { if (Math.abs(a - v) <= d) { d = Math.abs(a - v); b = i; } }); return b; };
+  const adj = axes.map(() => []);
+  for (const s of strips) {
+    const i = idx(s.a), j = idx(s.b), L = beamLength(s.beam);
+    if (i < 0 || j < 0 || i === j || L == null) continue;
+    const e = !!s.beam.est && s.beam.manual == null;
+    adj[i].push([j, L, e]); adj[j].push([i, -L, e]);
+  }
+  const c = axes.map(() => null), g = axes.map(() => null), est = axes.map(() => false);
+  for (let s = 0; s < axes.length; s++) {
+    if (c[s] != null) continue;
+    c[s] = 0; g[s] = s;
+    const q = [s];
+    while (q.length) {
+      const i = q.shift();
+      for (const [j, L, e] of adj[i]) if (c[j] == null) { c[j] = c[i] + L; g[j] = s; est[j] = est[i] || e; q.push(j); }
+    }
+  }
+  return { c, g, est };
+}
+function rebuildRooms() {
+  if (S.kind !== 'raster') return;
+  const HS = [], VS = [];
+  for (const b of S.beams) {
+    const dx = Math.abs(b.a.x - b.b.x), dy = Math.abs(b.a.y - b.b.y);
+    if (dy < dx * 0.02) HS.push({ c: (b.a.y + b.b.y) / 2, a: Math.min(b.a.x, b.b.x), b: Math.max(b.a.x, b.b.x), d: 0, beam: b });
+    else if (dx < dy * 0.02) VS.push({ c: (b.a.x + b.b.x) / 2, a: Math.min(b.a.y, b.b.y), b: Math.max(b.a.y, b.b.y), d: 0, beam: b });
+  }
+  const old = new Map(S.rooms.filter(r => r.auto).map(r => [roomKey(r), r]));
+  const kept = S.rooms.filter(r => !r.auto), rooms = [];
+  const res = buildRooms(HS, VS, Math.max(S.rw, S.rh), 0, 0);
+  if (res) {
+    const { X, Y } = res, tol = res.medD * 1.5;
+    S.axes = { xs: X, ys: Y };
+    const xr = axisReal(X, HS, tol), yr = axisReal(Y, VS, tol);
+    // ความยาวด้านห้อง = ผลรวมความยาวคานด้านนั้น
+    const side = (strips, ax, lo, hi) => {
+      const list = strips.filter(s => s.ax === ax && s.a >= lo - tol && s.b <= hi + tol);
+      if (list.reduce((t, s) => t + s.b - s.a, 0) < 0.9 * (hi - lo)) return null;
+      const lens = list.map(s => beamLength(s.beam));
+      if (lens.some(v => v == null)) return null;
+      return { len: lens.reduce((a, b) => a + b, 0), est: list.some(s => s.beam.est && s.beam.manual == null) };
+    };
+    const pick = (a, b) => !a ? b : !b ? a : a.est && !b.est ? b : a;
+    // ด้านที่ไม่มีคานครบ ใช้พิกัดจากคานต่อเนื่อง ถ้าไม่ได้จึงวัดจากรูป
+    const span = (A, R, i, j) => {
+      if (R.g[i] === R.g[j]) return { len: Math.abs(R.c[j] - R.c[i]), est: R.est[i] || R.est[j] };
+      const m = Math.abs(A[j] - A[i]) * S.mPerUnit;
+      return S.scaleFromOcr ? { len: Math.round(m / 0.05) * 0.05, est: true } : { len: m, est: false };
+    };
+    for (const q of res.rooms) {
+      const parts = q.rects.map(t => [{ x: X[t.i0], y: Y[t.j0] }, { x: X[t.i1], y: Y[t.j0] }, { x: X[t.i1], y: Y[t.j1] }, { x: X[t.i0], y: Y[t.j1] }]);
+      const r = { parts, outline: q.outline, rect: q.rects.length === 1, auto: true };
+      const key = roomKey(r), o = old.get(key);
+      if (S.hidden.includes(key)) continue;
+      r.name = o ? o.name : 'ห้อง ' + S.nextNo++;
+      if (o) { r.mL = o.mL; r.mW = o.mW; r.mArea = o.mArea; }
+      if (S.mPerUnit) {
+        if (r.rect) {
+          const t = q.rects[0];
+          const sx = pick(side(HS, t.j0, X[t.i0], X[t.i1]), side(HS, t.j1, X[t.i0], X[t.i1])) || span(X, xr, t.i0, t.i1);
+          const sy = pick(side(VS, t.i0, Y[t.j0], Y[t.j1]), side(VS, t.i1, Y[t.j0], Y[t.j1])) || span(Y, yr, t.j0, t.j1);
+          r.dx = sx.len; r.dy = sy.len; r.est = sx.est || sy.est; r.plan = r.dx * r.dy;
+        } else {
+          r.plan = 0; r.est = false;
+          for (const [i, j] of q.cells) {
+            const sx = span(X, xr, i, i + 1), sy = span(Y, yr, j, j + 1);
+            r.plan += sx.len * sy.len;
+            if (sx.est || sy.est) r.est = true;
+          }
+        }
+      }
+      rooms.push(r);
+    }
+  }
+  S.rooms = [...rooms, ...kept];
+}
+
+async function autoRead() {
+  if (!S.kind) return;
+  $('autoBtn').disabled = true;
+  hint('กำลังหาคานบนแปลน...');
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    if (S.rooms.length || S.beams.length) pushUndo();
+    S.beams = S.beams.filter(b => !b.auto);
+    S.rooms = S.rooms.filter(r => !r.auto && !r.cells);
+    S.hidden = [];
+    if (!S.rooms.length) S.nextNo = 1;
+    if (!S.beams.length) S.beamNo = 1;
+    let det = null, byBeam = false;
+    if (S.kind === 'raster') {
+      det = detectBeams();
+      for (const b of det.beams) addBeam(b.a, b.b, true);
+      rebuildRooms();
+      byBeam = S.rooms.some(r => r.auto);
+    }
+    if (!byBeam) {                      // ไม่ใช่แปลนคาน หรือคานไม่ล้อมเป็นห้อง ให้หาจากผนังแทน
+      S.beams = S.beams.filter(b => !b.auto);
+      det = detectRooms();
+      const { k, ox, oy } = det.src, wp = (x, y) => ({ x: ox + x / k, y: oy + y / k });
+      S.axes = det.rooms.length ? { xs: det.X.map(v => ox + v / k), ys: det.Y.map(v => oy + v / k) } : null;
+      for (const q of det.rooms) {
+        const parts = q.rects.map(t => [wp(det.X[t.i0], det.Y[t.j0]), wp(det.X[t.i1], det.Y[t.j0]), wp(det.X[t.i1], det.Y[t.j1]), wp(det.X[t.i0], det.Y[t.j1])]);
+        S.rooms.push({
+          name: 'ห้อง ' + S.nextNo++, parts, rect: q.rects.length === 1, box: q.rects[0], cells: q.cells,
+          outline: q.outline.map(([a, b]) => [wp(a.x, a.y), wp(b.x, b.y)]),
+        });
+      }
+    }
+    setTool('rect'); renderAll();
+    const n = S.rooms.filter(r => r.auto || r.cells).length;
+    const found = byBeam ? `พบคาน ${S.beams.filter(b => b.auto).length} ช่วง ล้อมเป็น ${n} ห้อง` : `พบ ${n} ห้อง`;
+    if (!n) {
+      hint('หาห้องไม่พบ แปลนอาจเอียงหรือเส้นไม่ชัด ให้ใช้ "ลากคาน" "วาดห้อง" หรือพิมพ์ขนาดห้องในรายการ', true);
+      if (!S.mPerUnit) setTool('scale');
+      return;
+    }
+    if (S.kind === 'dxf') { hint(`${found} · วัดจากไฟล์ DXF · ตรวจขอบเขตห้องกับแบบ`); return; }
+    if (S.scaleFromUser) { hint(`${found} · ใช้มาตราส่วนที่ตั้งไว้ · ตรวจขอบเขตห้องกับแบบ`); return; }
+    hint(`${found} กำลังอ่านเลขบอกระยะ...`);
+    const sc = await scaleFromWords(det, det.src.k);
+    if (sc && sc.ratio) {
+      S.mPerUnit = 1 / (sc.ratio / det.src.k); S.scaleFromUser = false; S.scaleFromOcr = sc.texts;
+      if (byBeam) { applyBeamDims(det, sc); rebuildRooms(); } else applyPlanDims(det, sc);
+      renderAll();
+      const est = S.rooms.filter(r => (r.auto || r.cells) && r.est).length;
+      const low = Math.max(S.rw, S.rh) < 1000 ? 'รูปความละเอียดต่ำ อาจหาคานไม่ครบ · ' : '';
+      const estNote = est ? `${est} ห้องเป็นค่าประมาณ · ` : '';
+      const fix = byBeam ? 'คานขาดให้ "ลากคาน" คานเกินให้ "ลบคาน"' : 'ห้องขาดให้ "วาดห้อง" ห้องแยกผิดให้ "รวมห้อง"';
+      hint(`${found} · ${estNote}${low}ตรวจกับแบบ: ${fix}`, !!low || est > 0);
+    } else {
+      setTool('scale');
+      hint(`${found} แต่อ่านเลขบอกระยะไม่ได้ คลิกสองจุดที่รู้ระยะจริงเพื่อตั้งมาตราส่วน`, true);
+    }
+  } finally { $('autoBtn').disabled = false; }
+}
+async function scaleFromWords(det, k) {
+  if (S.pdfWords && S.pdfWords.length) {
+    const sc = readScale(det, S.pdfWords.map(w => ({ text: w.text, x: w.x * k, y: w.y * k })));
+    if (sc.ratio) return sc;
+  }
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('หมดเวลาอ่านตัวเลข')), 150000));
+  try { return readScale(det, await Promise.race([ocrWords(det), timeout])); }
+  catch (e) { console.warn(e); return null; }
+}
+
+/* ---------- มุมมองและการวาด ---------- */
+function resize() {
+  const r = stage.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(r.width * dpr));
+  cv.height = Math.max(1, Math.round(r.height * dpr));
+  draw();
+}
+const W = () => cv.width / (window.devicePixelRatio || 1);
+const H = () => cv.height / (window.devicePixelRatio || 1);
+
+function fit() {
+  let b;
+  if (S.kind === 'raster') b = { x0: 0, y0: 0, x1: S.rw, y1: S.rh };
+  else if (S.kind === 'dxf') b = S.dxf.bounds;
+  else return;
+  const bw = Math.max(b.x1 - b.x0, 1e-9), bh = Math.max(b.y1 - b.y0, 1e-9), pad = 24;
+  const s = Math.min((W() - pad * 2) / bw, (H() - pad * 2) / bh);
+  S.view.s = s;
+  S.view.ox = (W() - bw * s) / 2 - b.x0 * s;
+  S.view.oy = (H() - bh * s) / 2 - b.y0 * s;
+  draw();
+}
+const toScreen = p => ({ x: p.x * S.view.s + S.view.ox, y: p.y * S.view.s + S.view.oy });
+const toWorld = (x, y) => ({ x: (x - S.view.ox) / S.view.s, y: (y - S.view.oy) / S.view.s });
+
+function zoomAt(f, sx = W() / 2, sy = H() / 2) {
+  const w = toWorld(sx, sy);
+  S.view.s *= f;
+  S.view.ox = sx - w.x * S.view.s; S.view.oy = sy - w.y * S.view.s;
+  draw();
+}
+
+const COLORS = ['#c8460c', '#0a7cc2', '#1f7a4d', '#8a4fbf', '#a87400', '#c2185b'];
+const roomColor = r => COLORS[(S.rooms.indexOf(r) + COLORS.length) % COLORS.length];
+const m2 = v => v.toFixed(2);
+function roomCaption(r) {
+  const a = roomArea(r), d = roomDims(r);
+  if (a == null) return '';
+  return (d ? `${m2(d.L)}×${m2(d.W)} = ` : '') + m2(a) + ' ตร.ม.';
+}
+// จุดวางป้ายชื่อ: กลางส่วนที่ใหญ่ที่สุดของห้อง
+function roomAnchor(r) {
+  let best = null, ba = -1;
+  for (const p of r.parts) { const a = polyArea(p); if (a > ba) { ba = a; best = p; } }
+  const b = bbox(best);
+  return { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, w: b.x1 - b.x0 };
+}
+// วาดห้องลงบน g โดย T แปลงพิกัดแปลนเป็นพิกัดภาพ
+function paintRooms(g, T, hotRoom, sel) {
+  for (const r of S.rooms) {
+    if (!r.parts.length) continue;
+    const col = roomColor(r), hot = r === hotRoom || r === sel;
+    g.fillStyle = col; g.globalAlpha = hot ? 0.38 : 0.2;
+    g.beginPath();
+    for (const p of r.parts) { p.forEach((v, i) => { const q = T(v); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.closePath(); }
+    g.fill();
+    g.globalAlpha = 1; g.strokeStyle = col; g.lineWidth = hot ? 3.5 : 2; g.lineCap = 'round';
+    g.beginPath();
+    for (const [a, b] of r.outline) { const p = T(a), q = T(b); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); }
+    g.stroke();
+  }
+}
+let raf = 0;
+function draw() { if (!raf) raf = requestAnimationFrame(paint); }
+function paint() {
+  raf = 0;
+  const dpr = window.devicePixelRatio || 1, { s, ox, oy } = S.view;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!S.kind) return;
+
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+  if (S.kind === 'raster') ctx.drawImage(S.raster, 0, 0, S.rw, S.rh);
+  else { ctx.strokeStyle = '#3b474d'; ctx.lineWidth = 1 / s; ctx.stroke(S.dxf.path); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  if (S.kind === 'dxf') {
+    ctx.fillStyle = '#5f6b70'; ctx.textBaseline = 'alphabetic';
+    for (const t of S.dxf.texts) {
+      const px = t.h * s;
+      if (px < 5) continue;
+      const l = S.dxf.layers.get(t.layer);
+      if (l && !l.visible) continue;
+      const p = toScreen(t);
+      if (p.x < -500 || p.y < -100 || p.x > W() + 100 || p.y > H() + 100) continue;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(t.ang);
+      ctx.font = px + 'px "Noto Sans Thai","Leelawadee UI",Tahoma,sans-serif';
+      ctx.fillText(t.s, 0, 0); ctx.restore();
+    }
+  }
+
+  paintRooms(ctx, toScreen, S.hotRoom, S.mergeA);
+  const beamMode = S.tool === 'trace' || S.tool === 'beamdel';
+  for (const b of S.beams) {
+    const p = toScreen(b.a), q = toScreen(b.b), hot = b === S.hotBeam;
+    ctx.strokeStyle = hot ? '#0a7cc2' : '#c8460c'; ctx.lineWidth = hot ? 6 : 3; ctx.lineCap = 'round'; ctx.globalAlpha = .85;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (S.tool === 'trace' && S.pending && S.mouse) rubber(S.pending, S.mouse, '#c8460c');
+  for (const r of S.rooms) {
+    if (!r.parts.length) continue;
+    const a = roomAnchor(r), p = toScreen(a), col = roomColor(r), cap = roomCaption(r), wpx = a.w * s;
+    if (wpx < 34) continue;
+    if (wpx >= 110 && cap) { tag(r.name, p.x, p.y - 11, col); tag(cap, p.x, p.y + 10, col); }
+    else tag(cap && wpx >= 60 ? m2(roomArea(r)) : r.name.replace('ห้อง ', ''), p.x, p.y, col);
+  }
+  if (beamMode) for (const b of S.beams) {
+    const p = toScreen(b.a), q = toScreen(b.b), L = beamLength(b);
+    if (L != null && dist(p, q) >= 44) tag(m2(L), (p.x + q.x) / 2, (p.y + q.y) / 2, b === S.hotBeam ? '#0a7cc2' : '#c8460c');
+  }
+
+  const m = S.mouse;
+  if (S.tool === 'rect' && S.pending && m) {
+    const a = S.pending, c = [a, { x: m.x, y: a.y }, m, { x: a.x, y: m.y }].map(toScreen);
+    ctx.strokeStyle = '#c8460c'; ctx.lineWidth = 2; ctx.setLineDash([7, 5]);
+    ctx.beginPath(); c.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.stroke();
+    ctx.setLineDash([]);
+    if (S.mPerUnit) {
+      const w = Math.abs(m.x - a.x) * S.mPerUnit, h = Math.abs(m.y - a.y) * S.mPerUnit;
+      tag(`${m2(w)}×${m2(h)} = ${m2(w * h)} ตร.ม.`, (c[0].x + c[2].x) / 2, (c[0].y + c[2].y) / 2, '#c8460c');
+    }
+  }
+  if (S.tool === 'poly' && S.poly.length) {
+    ctx.strokeStyle = '#c8460c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    S.poly.forEach((v, i) => { const q = toScreen(v); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); });
+    ctx.stroke();
+    if (m) rubber(S.poly[S.poly.length - 1], m, '#c8460c');
+    for (const v of S.poly) dot(v, '#c8460c');
+  }
+  if (S.tool === 'scale') {
+    const pts = S.scalePts || [];
+    if (pts.length === 1 && m) rubber(pts[0], m, '#0a7cc2');
+    if (pts.length === 2) rubber(pts[0], pts[1], '#0a7cc2');
+    for (const p of pts) dot(p, '#0a7cc2');
+  }
+  if (S.pending) dot(S.pending, '#c8460c');
+  if (m && S.snapped) {
+    const p = toScreen(m);
+    ctx.strokeStyle = '#0a7cc2'; ctx.lineWidth = 2;
+    ctx.strokeRect(p.x - 6, p.y - 6, 12, 12);
+  }
+}
+function rubber(a, b, color) {
+  const p = toScreen(a), q = toScreen(b);
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([7, 5]);
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+  ctx.setLineDash([]);
+  if (S.mPerUnit) tag(m2(dist(a, b) * S.mPerUnit) + ' ม.', q.x + 34, q.y - 16, color);
+}
+function dot(a, color) {
+  const p = toScreen(a);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, 7); ctx.fill();
+}
+function tag(text, x, y, color) {
+  const px = W() < 500 ? 10 : 12, th = px + 6;
+  ctx.font = '600 ' + px + 'px "Noto Sans Thai","Leelawadee UI",Tahoma,sans-serif';
+  const w = ctx.measureText(text).width + 8;
+  ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x - w / 2, y - th / 2, w, th, 3); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y + 1);
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
+
+/* ---------- จุดยึดและการเลือก ---------- */
+function snap(p) {
+  const r = (S.touch ? 24 : 12) / S.view.s; let best = null, bd = r;
+  const test = (x, y) => { const d = Math.hypot(x - p.x, y - p.y); if (d < bd) { bd = d; best = { x, y }; } };
+  for (const q of S.poly) test(q.x, q.y);
+  for (const b of S.beams) { test(b.a.x, b.a.y); test(b.b.x, b.b.y); }
+  for (const rm of S.rooms) for (const part of rm.parts) for (const v of part) test(v.x, v.y);
+  if (S.dxf) for (const s of S.dxf.segs) {
+    if (s.curve || !S.dxf.layers.get(s.layer).visible) continue;
+    test(s.ax, s.ay); test(s.bx, s.by);
+  }
+  if (best) return best;
+  if (!S.axes) return null;
+  const near = (arr, v) => { let b = null, d = r; for (const a of arr) if (Math.abs(a - v) < d) { d = Math.abs(a - v); b = a; } return b; };
+  const x = near(S.axes.xs, p.x), y = near(S.axes.ys, p.y);
+  return x == null && y == null ? null : { x: x == null ? p.x : x, y: y == null ? p.y : y };
+}
+function ortho(from, p) {
+  return Math.abs(p.x - from.x) >= Math.abs(p.y - from.y) ? { x: p.x, y: from.y } : { x: from.x, y: p.y };
+}
+function inPoly(p, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) c = !c;
+  }
+  return c;
+}
+function nearestBeam(p) {
+  const r = (S.touch ? 24 : 10) / S.view.s; let best = null, bd = r;
+  for (const b of S.beams) {
+    const dx = b.b.x - b.a.x, dy = b.b.y - b.a.y, l2 = dx * dx + dy * dy;
+    if (!l2) continue;
+    const t = Math.max(0, Math.min(1, ((p.x - b.a.x) * dx + (p.y - b.a.y) * dy) / l2));
+    const d = Math.hypot(p.x - b.a.x - t * dx, p.y - b.a.y - t * dy);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+function roomAt(p) {
+  for (let i = S.rooms.length - 1; i >= 0; i--) if (S.rooms[i].parts.some(q => inPoly(p, q))) return S.rooms[i];
+  return null;
+}
+function updateMouse(sx, sy) {
+  if (!S.kind) return;
+  const raw = toWorld(sx, sy);
+  if (S.tool === 'erase' || S.tool === 'merge') {
+    S.mouse = raw; S.snapped = false; S.hotRoom = roomAt(raw); draw(); return;
+  }
+  if (S.tool === 'beamdel') { S.mouse = raw; S.snapped = false; S.hotBeam = nearestBeam(raw); draw(); return; }
+  let p = raw;
+  const from = S.tool === 'trace' ? S.pending : S.tool === 'poly' ? S.poly[S.poly.length - 1] : (S.scalePts && S.scalePts.length === 1 ? S.scalePts[0] : null);
+  const sn = snap(p);
+  S.snapped = !!sn;
+  if (sn) p = sn;
+  // มือถือไม่มีปุ่ม Shift จึงล็อกแนวตรงให้เมื่อใกล้แนวนอนหรือแนวตั้ง
+  const dx = Math.abs(p.x - (from ? from.x : 0)), dy = Math.abs(p.y - (from ? from.y : 0));
+  if (from && (S.tool === 'trace' || S.shift || (S.touch && !sn && Math.min(dx, dy) < 0.07 * Math.max(dx, dy)))) p = ortho(from, p);   // คานแนวตรงเท่านั้นจึงจะล้อมเป็นห้องได้
+  S.mouse = p;
+  draw();
+}
+
+function addRoom(parts, rect) {
+  pushUndo();
+  const outline = [];
+  for (const p of parts) p.forEach((v, i) => outline.push([v, p[(i + 1) % p.length]]));
+  S.rooms.push({ name: 'ห้อง ' + S.nextNo++, parts, outline, rect });
+}
+function hideRoom(r) { if (r.auto) S.hidden.push(roomKey(r)); }
+function mergeRooms(a, b) {
+  pushUndo();
+  hideRoom(a); hideRoom(b); a.auto = false;
+  const aa = roomArea(a), ab = roomArea(b);
+  const all = [...a.parts, ...b.parts], box = bbox(all.flat());
+  const sum = all.reduce((s, p) => s + polyArea(p), 0);
+  const isRect = Math.abs((box.x1 - box.x0) * (box.y1 - box.y0) - sum) <= sum * 0.01;
+  let dx = null, dy = null;
+  if (isRect && a.dx != null && b.dx != null) {
+    const bb = bbox(a.parts.flat()), side = Math.abs((bb.y1 - bb.y0) - (box.y1 - box.y0)) < (box.y1 - box.y0) * 0.02;
+    dx = side ? a.dx + b.dx : a.dx; dy = side ? a.dy : a.dy + b.dy;
+  }
+  a.parts = all; a.outline = [...a.outline, ...b.outline]; a.rect = isRect;
+  a.dx = dx; a.dy = dy; a.cells = null; a.box = null;
+  a.plan = aa != null && ab != null && (a.plan != null || b.plan != null) ? aa + ab : null;
+  a.est = !!(a.est || b.est); a.mL = a.mW = a.mArea = null;
+  S.rooms.splice(S.rooms.indexOf(b), 1);
+}
+function clickAt() {
+  if (!S.kind || !S.mouse || $('scaleBox').classList.contains('show')) return;
+  const p = { ...S.mouse };
+  if (S.tool === 'trace') {
+    if (!S.pending) S.pending = p;
+    else if (dist(S.pending, p) > 1e-9) {
+      pushUndo();
+      addBeam(S.pending, p); S.pending = null;
+      rebuildRooms(); renderAll();
+    }
+  } else if (S.tool === 'beamdel') {
+    const h = nearestBeam(p);
+    if (h) { pushUndo(); S.beams.splice(S.beams.indexOf(h), 1); S.hotBeam = null; rebuildRooms(); renderAll(); }
+  } else if (S.tool === 'rect') {
+    if (!S.pending) S.pending = p;
+    else if (Math.abs(S.pending.x - p.x) > 1e-9 && Math.abs(S.pending.y - p.y) > 1e-9) {
+      const a = S.pending; S.pending = null;
+      addRoom([[a, { x: p.x, y: a.y }, p, { x: a.x, y: p.y }]], true); renderAll();
+    }
+  } else if (S.tool === 'poly') {
+    const r = (S.touch ? 24 : 12) / S.view.s;
+    if (S.poly.length >= 3 && dist(S.poly[0], p) <= r) {
+      const pts = S.poly; S.poly = [];
+      addRoom([pts], false); renderAll();
+    } else S.poly.push(p);
+  } else if (S.tool === 'erase') {
+    const h = roomAt(p);
+    if (h) { pushUndo(); hideRoom(h); S.rooms.splice(S.rooms.indexOf(h), 1); S.hotRoom = null; renderAll(); }
+  } else if (S.tool === 'merge') {
+    const h = roomAt(p);
+    if (h && !S.mergeA) S.mergeA = h;
+    else if (h && h !== S.mergeA) { mergeRooms(S.mergeA, h); S.mergeA = null; S.hotRoom = null; renderAll(); }
+    else S.mergeA = null;
+  } else if (S.tool === 'scale') {
+    S.scalePts = S.scalePts && S.scalePts.length === 1 ? [S.scalePts[0], p] : [p];
+    if (S.scalePts.length === 2) {
+      if (dist(S.scalePts[0], S.scalePts[1]) < 1e-9) { S.scalePts = [S.scalePts[0]]; return; }
+      $('scaleBox').classList.add('show');
+      $('scaleVal').value = ''; $('scaleVal').focus();
+    }
+  }
+  updateHint(); draw();
+}
+
+/* ---------- เมาส์และนิ้ว ---------- */
+let down = null, pinch = null;
+const ptrs = new Map();
+const pinchState = () => {
+  const [a, b] = [...ptrs.values()];
+  return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+};
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  S.touch = e.pointerType === 'touch';
+  ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+  if (ptrs.size === 2) { down = null; pinch = pinchState(); return; }
+  if (ptrs.size > 2) return;
+  down = { x: e.offsetX, y: e.offsetY, ox: S.view.ox, oy: S.view.oy, moved: false, btn: e.button };
+});
+cv.addEventListener('pointermove', e => {
+  S.shift = e.shiftKey;
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+  if (pinch && ptrs.size >= 2) {
+    const p = pinchState();
+    S.view.ox += p.mx - pinch.mx; S.view.oy += p.my - pinch.my;
+    zoomAt(p.d / pinch.d, p.mx, p.my);
+    pinch = p; return;
+  }
+  if (down) {
+    const dx = e.offsetX - down.x, dy = e.offsetY - down.y;
+    if (down.moved || Math.hypot(dx, dy) > (S.touch ? 9 : 4) || down.btn === 1) {
+      down.moved = true; S.view.ox = down.ox + dx; S.view.oy = down.oy + dy; draw(); return;
+    }
+  }
+  updateMouse(e.offsetX, e.offsetY);
+});
+cv.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); pinch = null; down = null; });
+cv.addEventListener('pointerup', e => {
+  ptrs.delete(e.pointerId);
+  if (pinch) { if (ptrs.size < 2) pinch = null; down = null; return; }
+  const d = down; down = null;
+  if (d && !d.moved && d.btn === 0) { S.shift = e.shiftKey; updateMouse(e.offsetX, e.offsetY); clickAt(); }
+});
+cv.addEventListener('pointerleave', () => { if (!down) { S.mouse = null; S.hotRoom = null; draw(); } });
+cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.offsetX, e.offsetY); }, { passive: false });
+cv.addEventListener('contextmenu', e => { e.preventDefault(); cancelStep(); });
+
+function cancelStep() {
+  clearDraft();
+  if (!$('scaleBox').classList.contains('show')) S.scalePts = null;
+  updateHint(); draw();
+}
+function undo() {
+  if (S.pending) { S.pending = null; draw(); updateHint(); return; }
+  if (S.poly.length) { S.poly.pop(); draw(); updateHint(); return; }
+  const snapShot = S.undo.pop();
+  if (!snapShot) return;
+  const o = JSON.parse(snapShot);
+  S.rooms = o.rooms; S.nextNo = o.nextNo; S.hotRoom = null; S.mergeA = null;
+  S.beams = o.beams; S.beamNo = o.beamNo; S.hidden = o.hidden; S.hotBeam = null;
+  renderAll();
+}
+addEventListener('keydown', e => {
+  const typing = /INPUT|SELECT/.test(document.activeElement.tagName);
+  if (e.key === 'Escape') {
+    if ($('scaleBox').classList.contains('show')) closeScale(); else cancelStep();
+  } else if (!typing && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+});
+
+/* ---------- ปุ่มและแผงควบคุม ---------- */
+function setTool(t) {
+  S.tool = t; clearDraft(); S.scalePts = null; S.hotRoom = null; S.hotBeam = null;
+  $('scaleBox').classList.remove('show');
+  document.querySelectorAll('.tool').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
+  cv.style.cursor = 'crosshair';
+  updateHint(); draw();
+}
+document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+const coarse = matchMedia('(pointer:coarse)').matches;
+function hint(msg, warn) {
+  if (coarse) msg = msg.replace(/คลิก/g, 'แตะ').replace(/ \(?(กด )?Shift[^)]*\)?/, '').replace('ลากเพื่อเลื่อนแปลน', 'ลากนิ้วเพื่อเลื่อนแปลน').replace('ล้อเมาส์เพื่อซูม', 'ใช้สองนิ้วเพื่อซูม');
+  const h = $('hint'); h.textContent = msg; h.classList.toggle('warn', !!warn); }
+function updateHint() {
+  if (!S.kind) return hint('เริ่มจากเลือกไฟล์แปลน หรือพิมพ์ขนาดห้องในรายการ');
+  if (S.tool === 'scale') {
+    const n = (S.scalePts || []).length;
+    return hint(n === 0 ? 'คลิกจุดแรกของระยะที่รู้ค่าจริง เช่น เส้นบอกระยะ 4.00 ม.' : n === 1 ? 'คลิกจุดที่สอง (กด Shift เพื่อล็อกแนวตรง)' : 'พิมพ์ระยะจริงเป็นเมตร');
+  }
+  if (!S.mPerUnit) return hint('ยังไม่ทราบมาตราส่วน กด "ตั้งมาตราส่วน" แล้วคลิกสองจุดที่รู้ระยะจริง', true);
+  if (S.tool === 'trace') return hint(S.pending ? 'คลิกปลายคาน (Esc = ยกเลิก)' : 'คลิกต้นคาน แล้วคลิกปลายคาน เมื่อคานล้อมครบ ห้องจะขึ้นเอง');
+  if (S.tool === 'beamdel') return hint('คลิกคานที่เกินเพื่อลบ ห้องจะคำนวณใหม่เอง · กด ย้อนกลับ ถ้าลบผิด');
+  if (S.tool === 'erase') return hint('คลิกห้องบนแปลนเพื่อลบ · กด ย้อนกลับ ถ้าลบผิด');
+  if (S.tool === 'merge') return hint(S.mergeA ? 'คลิกห้องที่สองเพื่อรวมกับ ' + S.mergeA.name : 'คลิกห้องแรกที่ต้องการรวม');
+  if (S.tool === 'poly') return hint(S.poly.length >= 3 ? 'คลิกมุมถัดไป หรือคลิกจุดแรกเพื่อปิดรูป' : 'คลิกทีละมุมของห้อง (Shift = ล็อกแนวตรง · Esc = ยกเลิก)');
+  hint(S.pending ? 'คลิกมุมตรงข้ามของห้อง (Esc = ยกเลิก)' : 'คลิกมุมห้อง แล้วคลิกมุมตรงข้าม · ลากเพื่อเลื่อนแปลน · ล้อเมาส์เพื่อซูม');
+}
+
+function closeScale() { $('scaleBox').classList.remove('show'); S.scalePts = null; updateHint(); draw(); }
+function applyScale() {
+  const v = parseFloat($('scaleVal').value);
+  if (!(v > 0)) { $('scaleVal').focus(); return; }
+  const [a, b] = S.scalePts;
+  S.mPerUnit = v / dist(a, b); S.scaleFromUser = true; S.scaleFromOcr = 0;
+  for (const r of S.rooms) { r.plan = null; r.dx = r.dy = null; r.est = false; }
+  for (const b of S.beams) { b.plan = null; b.est = false; }
+  rebuildRooms();
+  $('scaleBox').classList.remove('show');
+  setTool('rect');
+  renderAll();
+}
+$('scaleOk').addEventListener('click', applyScale);
+$('scaleCancel').addEventListener('click', closeScale);
+$('scaleVal').addEventListener('keydown', e => { if (e.key === 'Enter') applyScale(); });
+
+$('openBtn').addEventListener('click', () => $('file').click());
+$('emptyOpen').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) openFile(f); });
+['dragenter', 'dragover'].forEach(n => stage.addEventListener(n, e => { e.preventDefault(); stage.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach(n => stage.addEventListener(n, e => { e.preventDefault(); stage.classList.remove('dragover'); }));
+stage.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) openFile(f); });
+
+$('pageSel').addEventListener('change', async e => {
+  const n = +e.target.value;
+  if (!await startFresh()) { e.target.value = String(S.page); return; }
+  await showPdfPage(n); fit(); renderAll(); autoRead();
+});
+$('unitSel').addEventListener('change', e => {
+  S.mPerUnit = parseFloat(e.target.value); S.scaleFromUser = false; S.unitGuessed = false; renderAll();
+});
+
+function addManual() {
+  const l = parseFloat($('addL').value), w = parseFloat($('addW').value);
+  if (!(l > 0)) { $('addL').focus(); return; }
+  if (!(w > 0)) { $('addW').focus(); return; }
+  pushUndo();
+  const no = S.nextNo++;
+  S.rooms.push({ name: $('addName').value.trim() || 'ห้อง ' + no, parts: [], outline: [], rect: false, mL: l, mW: w });
+  $('addName').value = $('addL').value = $('addW').value = '';
+  $('addL').focus();
+  renderAll();
+}
+$('addBtn').addEventListener('click', addManual);
+['addL', 'addW'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') addManual(); }));
+$('autoBtn').addEventListener('click', autoRead);
+$('undoBtn').addEventListener('click', undo);
+$('zoomIn').addEventListener('click', () => zoomAt(1.3));
+$('zoomOut').addEventListener('click', () => zoomAt(1 / 1.3));
+$('fitBtn').addEventListener('click', fit);
+$('clearBtn').addEventListener('click', async () => {
+  if (await askBox('ล้างรายการห้องและคานทั้งหมด?')) { pushUndo(); S.rooms = []; S.nextNo = 1; S.beams = []; S.beamNo = 1; S.hidden = []; clearDraft(); renderAll(); }
+});
+$('csvBtn').addEventListener('click', exportCSV);
+
+async function saveFile(name, blob) {
+  const note = $('exportNote');
+  const dl = window.claude ? await claude.use('downloads') : null;
+  if (dl) {
+    try { await dl.save({ filename: name, data: blob }); note.textContent = 'บันทึก ' + name + ' แล้ว'; }
+    catch (e) { note.textContent = e && e.code === 'declined' ? 'ยกเลิกการดาวน์โหลด' : 'ดาวน์โหลดไม่สำเร็จ ลองอีกครั้ง'; }
+    return;
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+const RF = (w, px) => w + ' ' + px + 'px "Noto Sans Thai","Leelawadee UI","Sarabun",Tahoma,sans-serif';
+function drawPlanTo(g, x, y, w, h) {
+  g.strokeStyle = '#d9d3c5'; g.lineWidth = 2; g.strokeRect(x, y, w, h);
+  if (!S.kind) { g.fillStyle = '#5f6b70'; g.font = RF(400, 26); g.textAlign = 'center'; g.fillText('ไม่มีแปลน (พิมพ์ขนาดห้องเอง)', x + w / 2, y + h / 2); g.textAlign = 'left'; return; }
+  const b = S.kind === 'raster' ? { x0: 0, y0: 0, x1: S.rw, y1: S.rh } : S.dxf.bounds;
+  const pad = 10, s = Math.min((w - pad * 2) / (b.x1 - b.x0), (h - pad * 2) / (b.y1 - b.y0));
+  const ox = x + (w - (b.x1 - b.x0) * s) / 2 - b.x0 * s, oy = y + (h - (b.y1 - b.y0) * s) / 2 - b.y0 * s;
+  const T = p => ({ x: p.x * s + ox, y: p.y * s + oy });
+  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+  if (S.kind === 'raster') { g.imageSmoothingQuality = 'high'; g.drawImage(S.raster, ox, oy, S.rw * s, S.rh * s); }
+  else { g.save(); g.translate(ox, oy); g.scale(s, s); g.strokeStyle = '#3b474d'; g.lineWidth = 1 / s; g.stroke(S.dxf.path); g.restore(); }
+  paintRooms(g, T);
+  g.strokeStyle = 'rgba(200,70,12,.8)'; g.lineWidth = 3; g.lineCap = 'round';
+  for (const b of S.beams) { const p = T(b.a), q = T(b.b); g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke(); }
+  g.font = RF(600, 15); g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const r of S.rooms) {
+    if (!r.parts.length) continue;
+    const a = roomAnchor(r), p = T(a), area = roomArea(r), wide = a.w * s >= 120;
+    const pill = (t, yy) => {
+      const tw = g.measureText(t).width + 10;
+      g.fillStyle = roomColor(r); g.fillRect(p.x - tw / 2, yy - 11, tw, 22);
+      g.fillStyle = '#fff'; g.fillText(t, p.x, yy + 1);
+    };
+    if (wide && area != null) { pill(r.name, p.y - 12); pill(m2(area) + ' ตร.ม.', p.y + 12); }
+    else pill(r.name.replace('ห้อง ', ''), p.y);
+  }
+  g.restore(); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+}
+
+// รายงาน A4 วาดเป็นภาพทั้งหมด จึงแสดงภาษาไทยเหมือนกันทั้งภาพ PDF และงานพิมพ์
+function reportPages() {
+  const PW = 1240, PH = 1754, M = 70, pages = [];
+  let g, y;
+  const newPage = () => {
+    const c = document.createElement('canvas'); c.width = PW; c.height = PH;
+    g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, PW, PH);
+    pages.push(c); y = M;
+  };
+  const text = (s, x, yy, font, color = '#1e2a30', align = 'left') => { g.font = font; g.fillStyle = color; g.textAlign = align; g.fillText(s, x, yy); g.textAlign = 'left'; };
+  const { sum } = totals(), rooms = S.rooms.filter(r => roomArea(r) != null);
+
+  newPage();
+  text('รายการคำนวณพื้นที่', M, y + 34, RF(700, 42));
+  y += 66;
+  const when = new Date().toLocaleDateString('th-TH', { dateStyle: 'long' });
+  text($('fileName').textContent + ' · ' + when, M, y + 18, RF(400, 24), '#5f6b70');
+  y += 44;
+  drawPlanTo(g, M, y, PW - M * 2, 760);
+  y += 790;
+  g.fillStyle = '#1e2a30'; g.fillRect(M, y, PW - M * 2, 120);
+  text('พื้นที่รวมทุกห้อง', M + 28, y + 46, RF(400, 26), '#fff');
+  text(rooms.length + ' ห้อง', M + 28, y + 92, RF(400, 26), '#fff');
+  text(m2(sum) + ' ตร.ม.', PW - M - 28, y + 80, RF(700, 62), '#fff', 'right');
+  y += 160;
+
+  const cols = [[M + 10, 'left'], [M + 520, 'right'], [M + 680, 'right'], [M + 880, 'right'], [PW - M - 10, 'right']];
+  const header = () => {
+    text('รายการห้อง', M, y + 30, RF(700, 32)); y += 54;
+    ['ห้อง', 'ยาว (ม.)', 'กว้าง (ม.)', 'ตร.ม.', 'ที่มา'].forEach((v, i) => text(v, cols[i][0], y + 24, RF(500, 22), '#5f6b70', cols[i][1]));
+    y += 36;
+    g.strokeStyle = '#1e2a30'; g.lineWidth = 2; g.beginPath(); g.moveTo(M, y); g.lineTo(PW - M, y); g.stroke();
+  };
+  header();
+  for (const r of rooms) {
+    if (y + 36 > PH - 110) { newPage(); header(); }
+    const d = roomDims(r);
+    [r.name, d ? m2(d.L) : '—', d ? m2(d.W) : '—', m2(roomArea(r)), roomSource(r)].forEach((v, i) => text(v, cols[i][0], y + 26, RF(400, 24), '#1e2a30', cols[i][1]));
+    y += 36;
+    g.strokeStyle = '#eee7d8'; g.lineWidth = 1; g.beginPath(); g.moveTo(M, y); g.lineTo(PW - M, y); g.stroke();
+  }
+  if (y + 50 > PH - 90) { newPage(); header(); }
+  ['รวม', '', '', m2(sum), ''].forEach((v, i) => text(v, cols[i][0], y + 34, RF(700, 26), '#1e2a30', cols[i][1]));
+
+  pages.forEach((c, i) => {
+    const q = c.getContext('2d'); q.font = RF(400, 20); q.fillStyle = '#5f6b70'; q.textAlign = 'right';
+    q.fillText('หน้า ' + (i + 1) + ' / ' + pages.length, PW - M, PH - 40);
+  });
+  return pages;
+}
+
+async function buildPdf(pages) {
+  const enc = new TextEncoder(), chunks = [], xref = []; let off = 0;
+  const put = d => { const b = typeof d === 'string' ? enc.encode(d) : d; chunks.push(b); off += b.length; };
+  put('%PDF-1.4\n');
+  const obj = (id, dict, stream) => {
+    xref[id] = off;
+    put(id + ' 0 obj\n' + dict + '\n');
+    if (stream) { put('stream\n'); put(stream); put('\nendstream\n'); }
+    put('endobj\n');
+  };
+  const kids = pages.map((_, i) => (3 + i * 3) + ' 0 R').join(' ');
+  obj(1, '<</Type/Catalog/Pages 2 0 R>>');
+  obj(2, '<</Type/Pages/Kids[' + kids + ']/Count ' + pages.length + '>>');
+  const PWpt = 595.28, PHpt = 841.89;
+  for (let i = 0; i < pages.length; i++) {
+    const id = 3 + i * 3, c = pages[i];
+    const jpg = new Uint8Array(await (await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9))).arrayBuffer());
+    const content = enc.encode('q ' + PWpt + ' 0 0 ' + PHpt + ' 0 0 cm /Im0 Do Q');
+    obj(id, '<</Type/Page/Parent 2 0 R/MediaBox[0 0 ' + PWpt + ' ' + PHpt + ']/Resources<</XObject<</Im0 ' + (id + 1) + ' 0 R>>>>/Contents ' + (id + 2) + ' 0 R>>');
+    obj(id + 1, '<</Type/XObject/Subtype/Image/Width ' + c.width + '/Height ' + c.height + '/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ' + jpg.length + '>>', jpg);
+    obj(id + 2, '<</Length ' + content.length + '>>', content);
+  }
+  const start = off, count = 3 + pages.length * 3;
+  let x = 'xref\n0 ' + count + '\n0000000000 65535 f \n';
+  for (let i = 1; i < count; i++) x += String(xref[i]).padStart(10, '0') + ' 00000 n \n';
+  put(x + 'trailer\n<</Size ' + count + '/Root 1 0 R>>\nstartxref\n' + start + '\n%%EOF');
+  return new Blob(chunks, { type: 'application/pdf' });
+}
+
+async function exportPdf() { await saveFile('พื้นที่ห้อง.pdf', await buildPdf(reportPages())); }
+async function exportPng() {
+  const pages = reportPages(), c = document.createElement('canvas');
+  c.width = pages[0].width; c.height = pages[0].height * pages.length;
+  const g = c.getContext('2d');
+  pages.forEach((p, i) => g.drawImage(p, 0, i * p.height));
+  await saveFile('พื้นที่ห้อง.png', await new Promise(r => c.toBlob(r, 'image/png')));
+}
+async function printReport() {
+  const area = $('printArea');
+  const imgs = reportPages().map(c => { const i = new Image(); i.src = c.toDataURL('image/jpeg', 0.92); return i; });
+  area.replaceChildren(...imgs);
+  await Promise.all(imgs.map(i => i.decode()));
+  window.print();
+}
+if (window.self !== window.top) {        // ในหน้าลิงก์ของ Claude สั่งพิมพ์ตรงไม่ได้ ให้ใช้ PDF แทน
+  $('printBtn').hidden = true;
+  $('exportNote').textContent = 'รายงานมีแปลน พื้นที่รวม และรายการทุกห้อง ถ้าจะพิมพ์ให้ดาวน์โหลด PDF แล้วสั่งพิมพ์จากไฟล์';
+}
+$('printBtn').addEventListener('click', printReport);
+$('pdfBtn').addEventListener('click', exportPdf);
+$('pngBtn').addEventListener('click', exportPng);
+
+function exportCSV() {
+  const q = s => `"${String(s).replace(/"/g, '""')}"`;
+  const rows = [['ลำดับ', 'ห้อง', 'ยาว (ม.)', 'กว้าง (ม.)', 'พื้นที่ (ตร.ม.)', 'ที่มา'].map(q).join(',')];
+  let sum = 0, n = 0;
+  for (const r of S.rooms) {
+    const a = roomArea(r); if (a == null) continue;
+    const d = roomDims(r); sum += a;
+    rows.push([++n, q(r.name), d ? d.L.toFixed(3) : '', d ? d.W.toFixed(3) : '', a.toFixed(3), q(roomSource(r))].join(','));
+  }
+  rows.push(['', q('รวม'), '', '', sum.toFixed(3), ''].join(','));  saveFile('พื้นที่ห้อง.csv', new Blob([String.fromCharCode(0xFEFF) + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+}
+
+/* ---------- แสดงผล ---------- */
+function renderLayers() {
+  const box = $('layerList'), d = S.dxf;
+  box.replaceChildren();
+  const names = [...d.layers.keys()].sort((a, b) => a.localeCompare(b));
+  for (const n of names) {
+    const l = d.layers.get(n), lab = document.createElement('label'), c = document.createElement('input');
+    const nm = document.createElement('span'), cnt = document.createElement('span');
+    c.type = 'checkbox'; c.checked = l.visible;
+    c.addEventListener('change', () => { l.visible = c.checked; rebuildPath(); draw(); });
+    nm.className = 'nm'; nm.textContent = n; nm.title = n;
+    cnt.className = 'cnt'; cnt.textContent = l.count.toLocaleString();
+    lab.append(c, nm, cnt); box.append(lab);
+  }
+}
+
+function renderTotals() {
+  const { sum, missing } = totals(), areas = S.rooms.map(roomArea).filter(a => a != null);
+  $('total').firstChild.nodeValue = m2(sum);
+  $('formula').textContent = !S.rooms.length ? 'ยังไม่มีห้อง'
+    : missing ? `มี ${missing} ห้องที่ยังไม่รวม เพราะยังไม่ได้ตั้งมาตราส่วน`
+    : areas.length <= 8 && areas.length > 1 ? areas.map(m2).join(' + ') + ' ตร.ม.'
+    : `${S.rooms.length} ห้อง`;
+  const cell = $('sumCell');
+  if (cell) cell.textContent = m2(sum);
+}
+
+function renderBeams() {
+  const body = $('beamRows'); body.replaceChildren();
+  $('beamSec').hidden = !S.beams.length;
+  $('beamSum').textContent = `รายการคาน (${S.beams.length} ช่วง)`;
+  for (const b of S.beams) {
+    const tr = document.createElement('tr'), n = document.createElement('td'), c = document.createElement('td'), d = document.createElement('td');
+    n.textContent = b.name; c.className = 'r';
+    const len = document.createElement('input'), L = beamLength(b);
+    len.type = 'number'; len.min = '0'; len.step = 'any'; len.className = 'num'; len.placeholder = '—';
+    len.setAttribute('aria-label', 'ความยาวคาน ' + b.name + ' (เมตร)');
+    len.value = L == null ? '' : L.toFixed(2);
+    if (b.est && b.manual == null) { len.classList.add('est'); len.title = 'ไม่มีเลขบอกระยะในแบบ ค่านี้ประมาณจากรูป'; }
+    if (b.manual != null) { len.classList.add('edited'); len.title = 'แก้ค่าเอง ลบค่าออกเพื่อกลับไปใช้ระยะจากแปลน'; }
+    len.addEventListener('change', () => {
+      const v = parseFloat(len.value);
+      pushUndo();
+      b.manual = v > 0 ? v : null;
+      rebuildRooms(); renderAll();
+    });
+    c.append(len);
+    const x = document.createElement('button');
+    x.className = 'x'; x.textContent = '×'; x.setAttribute('aria-label', 'ลบคาน ' + b.name);
+    x.addEventListener('click', () => { pushUndo(); S.beams.splice(S.beams.indexOf(b), 1); S.hotBeam = null; rebuildRooms(); renderAll(); });
+    d.append(x);
+    tr.addEventListener('mouseenter', () => { S.hotBeam = b; tr.classList.add('hot'); draw(); });
+    tr.addEventListener('mouseleave', () => { S.hotBeam = null; tr.classList.remove('hot'); draw(); });
+    tr.append(n, c, d); body.append(tr);
+  }
+}
+
+function renderAll() {
+  const body = $('rows'); body.replaceChildren();
+  S.rooms.forEach(r => {
+    const tr = document.createElement('tr');
+    const td = cls => { const c = document.createElement('td'); if (cls) c.className = cls; tr.append(c); return c; };
+    const input = (cls, label) => {
+      const i = document.createElement('input');
+      i.type = 'number'; i.min = '0'; i.step = 'any'; i.className = cls; i.setAttribute('aria-label', label + ' ' + r.name); i.placeholder = '—';
+      return i;
+    };
+    const name = document.createElement('input');
+    name.type = 'text'; name.value = r.name; name.setAttribute('aria-label', 'ชื่อห้อง');
+    name.addEventListener('focus', () => pushUndo(), { once: true });
+    name.addEventListener('input', () => { r.name = name.value; draw(); });
+    td().append(name);
+
+    const d = roomDims(r), isRect = r.rect || r.mL != null;
+    const typed = r.mL != null, L = input('num', 'ยาว'), Wd = input('num', 'กว้าง'), A = input('num area', 'พื้นที่');
+    L.value = r.mL != null ? r.mL.toFixed(2) : d ? d.L.toFixed(2) : '';
+    Wd.value = r.mW != null ? r.mW.toFixed(2) : d ? d.W.toFixed(2) : '';
+    L.disabled = Wd.disabled = !isRect;
+    const setDims = () => {
+      const l = parseFloat(L.value), w = parseFloat(Wd.value);
+      pushUndo();
+      r.mArea = null;
+      if (l > 0 || w > 0) { r.mL = l > 0 ? l : null; r.mW = w > 0 ? w : null; }
+      else if (r.parts.length) r.mL = r.mW = null;
+      renderAll();
+    };
+    L.addEventListener('change', setDims); Wd.addEventListener('change', setDims);
+    td('r').append(L); td('r').append(Wd);
+
+    const area = roomArea(r);
+    A.value = area == null ? '' : m2(area);
+    if (r.est && !typed && r.mArea == null) {
+      for (const i of [L, Wd, A]) { i.classList.add('est'); i.title = 'ไม่มีเลขบอกระยะในแบบ ค่านี้ประมาณจากรูป ปัดเป็น 0.05 ม.'; }
+    }
+    if ((typed || r.mArea != null) && r.parts.length) {
+      for (const i of [L, Wd, A]) { i.classList.add('edited'); i.title = 'แก้ค่าเอง ลบค่าออกเพื่อกลับไปใช้ระยะจากแปลน'; }
+    }
+    A.addEventListener('change', () => {
+      const v = parseFloat(A.value);
+      pushUndo();
+      r.mArea = v > 0 ? v : null;
+      renderAll();
+    });
+    td('r').append(A);
+
+    const x = document.createElement('button');
+    x.className = 'x'; x.textContent = '×'; x.setAttribute('aria-label', 'ลบ ' + r.name);
+    x.addEventListener('click', () => { pushUndo(); S.rooms.splice(S.rooms.indexOf(r), 1); S.hotRoom = null; renderAll(); });
+    td().append(x);
+
+    tr.addEventListener('mouseenter', () => { S.hotRoom = r; tr.classList.add('hot'); draw(); });
+    tr.addEventListener('mouseleave', () => { S.hotRoom = null; tr.classList.remove('hot'); draw(); });
+    body.append(tr);
+  });
+  const has = S.rooms.length > 0;
+  if (has) {
+    const tr = document.createElement('tr'), a = document.createElement('td'), b = document.createElement('td'), c = document.createElement('td');
+    tr.className = 'sum'; a.colSpan = 3; a.textContent = 'รวมทั้งหมด'; b.id = 'sumCell'; b.className = 'r';
+    tr.append(a, b, c); body.append(tr);
+  }
+  renderBeams();
+  $('tbl').hidden = !has; $('noRooms').hidden = has;
+  $('estNote').hidden = !S.rooms.some(r => r.est && r.mL == null && r.mArea == null);
+  const noData = !has || S.rooms.every(r => roomArea(r) == null);
+  for (const id of ['csvBtn', 'pdfBtn', 'pngBtn', 'printBtn']) $(id).disabled = noData;
+  $('clearBtn').disabled = !has;
+
+  const n = $('scaleNote');
+  n.className = 'note';
+  if (!S.kind) n.textContent = 'ยังไม่ได้ตั้งมาตราส่วน';
+  else if (S.scaleFromUser) { n.textContent = 'ตั้งมาตราส่วนจากระยะจริงแล้ว'; n.classList.add('good'); }
+  else if (S.scaleFromOcr) { n.textContent = `อ่านเลขบอกระยะได้ ${S.scaleFromOcr} ค่าในแบบ · เทียบขนาดห้องกับแบบอีกครั้ง`; n.classList.add('good'); }
+  else if (S.kind === 'dxf' && S.unitGuessed) { n.textContent = 'ไฟล์ไม่ระบุหน่วย ระบบเดาให้ กรุณาตรวจว่าหน่วยถูกต้อง'; n.classList.add('bad'); }
+  else if (S.kind === 'dxf') { n.textContent = 'ใช้หน่วยจากไฟล์ DXF'; n.classList.add('good'); }
+  else { n.textContent = 'ยังไม่ได้ตั้งมาตราส่วน'; n.classList.add('bad'); }
+
+  renderTotals(); updateHint(); draw();
+}
+
+addEventListener('beforeunload', e => { if (S.rooms.length || S.beams.length) { e.preventDefault(); e.returnValue = ''; } });
+new ResizeObserver(resize).observe(stage);
+resize(); renderAll();
+</script>
+</body>
+</html>
